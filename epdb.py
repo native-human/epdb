@@ -15,6 +15,7 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 class Savepoint:
     spbynumber = [None]
     def __init__(self, lineno):
+        print('Savepoint created: {0}'.format(lineno))
         self.lineno = lineno
         self.spbynumber.append(self)
     def spprint(self, out = None):
@@ -26,7 +27,47 @@ class Savepoint:
 class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self)
-        self.prompt = '(Edpb)'
+        self.prompt = '(Edpb) '
+        
+    def _runscript(self, filename):
+        print('_runscript')
+        pdb.Pdb._runscript(self, filename)
+    
+    def dispatch_line(self, frame):
+        #print('Line is going to be dispatched: ', frame.f_lineno)
+        return pdb.Pdb.dispatch_line(self, frame)    
+    
+    def set_save(self, filename, lineno, temporary=0, cond = None,
+                  funcname=None):
+        sp = Savepoint(lineno)
+    
+    def break_here(self, frame):
+        if pdb.Pdb.break_here(self, frame):
+            print('Breakpoint found')
+            return True
+        return False
+        
+        #filename = self.canonic(frame.f_code.co_filename)
+        #if not filename in self.breaks:
+        #    return False
+        #lineno = frame.f_lineno
+        #if not lineno in self.breaks[filename]:
+        #    # The line itself has no breakpoint, but maybe the line is the
+        #    # first line of a function with breakpoint set by function name.
+        #    lineno = frame.f_code.co_firstlineno
+        #    if not lineno in self.breaks[filename]:
+        #        return False
+        #
+        ## flag says ok to delete temp. bp
+        #(bp, flag) = effective(filename, lineno, frame)
+        #if bp:
+        #    self.currentbp = bp.number
+        #    if (flag and bp.temporary):
+        #        self.do_clear(str(bp.number))
+        #    return True
+        #else:
+        #    return False
+    
     def do_savepoint(self, arg, temporary=0):
         # savepoint [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
@@ -35,14 +76,14 @@ class Epdb(pdb.Pdb):
                 if sp:
                     sp.spprint()
             return
-        elif len(arg) == 1:
-            lineno = 0            
-            #try:
-            #    lineno = int(arg)
-            #except ValueError as msg:
-            #    print('*** Bad lineno:', arg, file=self.stdout)
-            #    return
-            sp = Savepoint(lineno)
+        #elif len(arg) == 1:
+        #    lineno = 0            
+        #    #try:
+        #    #    lineno = int(arg)
+        #    #except ValueError as msg:
+        #    #    print('*** Bad lineno:', arg, file=self.stdout)
+        #    #    return
+        #    sp = Savepoint(lineno)
         
         filename = None
         lineno = None
@@ -53,6 +94,70 @@ class Epdb(pdb.Pdb):
             # parse stuff after comma: "condition"
             cond = arg[comma+1:].lstrip()
             arg = arg[:comma].rstrip()
+
+        colon = arg.rfind(':')
+        funcname = None
+
+        if colon >= 0:
+            filename = arg[:colon].rstrip()
+            f = self.lookupmodule(filename)
+            if not f:
+                print('*** ', repr(filename))
+                print('not found from sys.path')
+                return
+            else:
+                filename = f
+            arg = arg[colon+1:].lstrip()
+            try:
+                lineno = int(arg)
+            except ValueError as msg:
+                print('*** Bad lineno:', arg)
+                return
+        else:
+            # no colon; can be lineno or function
+            try:
+                lineno = int(arg)
+            except ValueError:
+                try:
+                    func = eval(arg,
+                                self.curframe.f_globals,
+                                self.curframe_locals)
+                except:
+                    func = arg
+                try:
+                    if hasattr(func, '__func__'):
+                        func = func.__func__
+                    code = func.__code__
+                    #use co_name to identify the bkpt (function names
+                    #could be aliased, but co_name is invariant)
+                    funcname = code.co_name
+                    lineno = code.co_firstlineno
+                    filename = code.co_filename
+                except:
+                    # last thing to try
+                    (ok, filename, ln) = self.lineinfo(arg)
+                    if not ok:
+                        print('*** The specified object')
+                        print(repr(arg))
+                        print('is not a function')
+                        print('or was not found along sys.path.')
+                        return
+                    funcname = ok # ok contains a function name
+                    lineno = int(ln)
+        if not filename:
+            filename = self.defaultFile()
+        
+        line = self.checkline(filename, lineno)
+        if line:
+            # now set the save point
+            err = self.set_save(filename, line, temporary, cond, funcname)
+            if err:
+                print('***', err)
+            #else:
+            #    bp = self.get_breaks(filename, line)[-1]
+            #    print("Breakpoint %d at %s:%d" % (bp.number,
+            #                                      bp.file,
+            #                                      bp.line))
 
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)
@@ -99,18 +204,19 @@ def test():
 # print help
 def help():
     for dirname in sys.path:
-        fullname = os.path.join(dirname, 'pdb.doc')
+        fullname = os.path.join(dirname, 'epdb.doc')
         if os.path.exists(fullname):
             sts = os.system('${PAGER-more} '+fullname)
             if sts: print('*** Pager exit status:', sts)
             break
     else:
-        print('Sorry, can\'t find the help file "pdb.doc"', end=' ')
-        print('along the Python search path')
+        pass
+        #print('Sorry, can\'t find the help file "epdb.doc"', end=' ')
+        #print('along the Python search path')
 
 def main():
     if not sys.argv[1:] or sys.argv[1] in ("--help", "-h"):
-        print("usage: pdb.py scriptfile [arg] ...")
+        print("usage: epdb.py scriptfile [arg] ...")
         sys.exit(2)
 
     mainpyfile =  sys.argv[1]     # Get script filename
@@ -134,21 +240,23 @@ def main():
             if epdb._user_requested_quit:
                 break
             print("The program finished and will be restarted")
-        except Restart:
+        except pdb.Restart:
             print("Restarting", mainpyfile, "with arguments:")
             print("\t" + " ".join(sys.argv[1:]))
         except SystemExit:
             # In most cases SystemExit does not warrant a post-mortem session.
-            print("The program exited via sys.exit(). Exit status: ", end=' ')
-            print(sys.exc_info()[1])
+            pass
+            #print("The program exited via sys.exit(). Exit status: ", end=' ')
+            #print(sys.exc_info()[1])
         except:
             traceback.print_exc()
             print("Uncaught exception. Entering post mortem debugging")
             print("Running 'cont' or 'step' will restart the program")
             t = sys.exc_info()[2]
             epdb.interaction(None, t)
-            print("Post mortem debugger finished. The " + mainpyfile +
-                  " will be restarted")
+            
+            #print("Post mortem debugger finished. The " + mainpyfile +
+            #      " will be restarted")
 
 
 # When invoked as main program, invoke the debugger on a script
