@@ -2,6 +2,8 @@
 
 import multiprocessing
 import os
+from multiprocessing import Process, Value, Array
+
 
 pipe1 = multiprocessing.Pipe()
 (p1parent,p1child) = pipe1
@@ -12,7 +14,7 @@ if pid:
     while True:
         try:
             item = p1parent.recv()
-            print item
+            print(item)
         except EOFError:
             break
     #while True:
@@ -29,7 +31,7 @@ else:
     p1parent.close()
     pipe2 = multiprocessing.Pipe()
     p2parent,p2child = pipe2
-    p1child.send('blah')
+    p1child.send(pipe2)
     p1child.send('blup')
     #p2parent.close()
     #print(p2child.recv())
