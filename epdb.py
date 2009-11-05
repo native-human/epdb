@@ -8,29 +8,36 @@ import os
 import re
 import pprint
 import traceback
+import snapshotting
 
 __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
            "post_mortem", "help"]
 
-class Savepoint:
-    spbynumber = [None]
-    def __init__(self, lineno):
-        print('Savepoint created: {0}'.format(lineno))
-        self.lineno = lineno
-        self.spbynumber.append(self)
-    def spprint(self, out = None):
-        if out == None:
-            out = sys.stdout
-        print('Savepoint %d' % self.lineno)
+class EpdbExit(Exception):
+    """Causes a debugger to be exited for the debugged python process."""
+    pass
+
+#class Savepoint:
+#    spbynumber = [None]
+#    def __init__(self, lineno):
+#        print('Savepoint created: {0}'.format(lineno))
+#        self.lineno = lineno
+#        self.spbynumber.append(self)
+#    def spprint(self, out = None):
+#        if out == None:
+#            out = sys.stdout
+#        print('Savepoint %d' % self.lineno)
     
+
 
 class Epdb(pdb.Pdb):
     def __init__(self):
+        self.mp = snapshotting.MainProcess()
         pdb.Pdb.__init__(self)
         self.prompt = '(Edpb) '
         
     def _runscript(self, filename):
-        print('_runscript')
+        # print('_runscript')
         pdb.Pdb._runscript(self, filename)
     
     def dispatch_line(self, frame):
@@ -41,9 +48,17 @@ class Epdb(pdb.Pdb):
                   funcname=None):
         sp = Savepoint(lineno)
     
+    def stop_here(self, frame):
+        #print('Stop here')
+        if pdb.Pdb.stop_here(self, frame):
+            #print('stop found')
+            return True
+        return False
+    
     def break_here(self, frame):
+        #print('Break here')
         if pdb.Pdb.break_here(self, frame):
-            print('Breakpoint found')
+            #print('Breakpoint found')
             return True
         return False
         
@@ -68,96 +83,119 @@ class Epdb(pdb.Pdb):
         #else:
         #    return False
     
-    def do_savepoint(self, arg, temporary=0):
-        # savepoint [ ([filename:]lineno | function) [, "condition"] ]
-        if not arg:
-            print('Show savepoints')
-            for sp in Savepoint.spbynumber:
-                if sp:
-                    sp.spprint()
-            return
-        #elif len(arg) == 1:
-        #    lineno = 0            
-        #    #try:
-        #    #    lineno = int(arg)
-        #    #except ValueError as msg:
-        #    #    print('*** Bad lineno:', arg, file=self.stdout)
-        #    #    return
-        #    sp = Savepoint(lineno)
-        
-        filename = None
-        lineno = None
-        cond = None
-        
-        comma = arg.find(',')
-        if comma > 0:
-            # parse stuff after comma: "condition"
-            cond = arg[comma+1:].lstrip()
-            arg = arg[:comma].rstrip()
+    #def do_savepoint(self, arg, temporary=0):
+    #    # savepoint [ ([filename:]lineno | function) [, "condition"] ]
+    #    if not arg:
+    #        print('Show savepoints')
+    #        for sp in Savepoint.spbynumber:
+    #            if sp:
+    #                sp.spprint()
+    #        return
+    #    #elif len(arg) == 1:
+    #    #    lineno = 0            
+    #    #    #try:
+    #    #    #    lineno = int(arg)
+    #    #    #except ValueError as msg:
+    #    #    #    print('*** Bad lineno:', arg, file=self.stdout)
+    #    #    #    return
+    #    #    sp = Savepoint(lineno)
+    #    
+    #    filename = None
+    #    lineno = None
+    #    cond = None
+    #    
+    #    comma = arg.find(',')
+    #    if comma > 0:
+    #        # parse stuff after comma: "condition"
+    #        cond = arg[comma+1:].lstrip()
+    #        arg = arg[:comma].rstrip()
+    #
+    #    colon = arg.rfind(':')
+    #    funcname = None
+    #
+    #    if colon >= 0:
+    #        filename = arg[:colon].rstrip()
+    #        f = self.lookupmodule(filename)
+    #        if not f:
+    #            print('*** ', repr(filename))
+    #            print('not found from sys.path')
+    #            return
+    #        else:
+    #            filename = f
+    #        arg = arg[colon+1:].lstrip()
+    #        try:
+    #            lineno = int(arg)
+    #        except ValueError as msg:
+    #            print('*** Bad lineno:', arg)
+    #            return
+    #    else:
+    #        # no colon; can be lineno or function
+    #        try:
+    #            lineno = int(arg)
+    #        except ValueError:
+    #            try:
+    #                func = eval(arg,
+    #                            self.curframe.f_globals,
+    #                            self.curframe_locals)
+    #            except:
+    #                func = arg
+    #            try:
+    #                if hasattr(func, '__func__'):
+    #                    func = func.__func__
+    #                code = func.__code__
+    #                #use co_name to identify the bkpt (function names
+    #                #could be aliased, but co_name is invariant)
+    #                funcname = code.co_name
+    #                lineno = code.co_firstlineno
+    #                filename = code.co_filename
+    #            except:
+    #                # last thing to try
+    #                (ok, filename, ln) = self.lineinfo(arg)
+    #                if not ok:
+    #                    print('*** The specified object')
+    #                    print(repr(arg))
+    #                    print('is not a function')
+    #                    print('or was not found along sys.path.')
+    #                    return
+    #                funcname = ok # ok contains a function name
+    #                lineno = int(ln)
+    #    if not filename:
+    #        filename = self.defaultFile()
+    #    
+    #    line = self.checkline(filename, lineno)
+    #    if line:
+    #        # now set the save point
+    #        err = self.set_save(filename, line, temporary, cond, funcname)
+    #        if err:
+    #            print('***', err)
+    #        #else:
+    #        #    bp = self.get_breaks(filename, line)[-1]
+    #        #    print("Breakpoint %d at %s:%d" % (bp.number,
+    #        #                                      bp.file,
+    #        #                                      bp.line))
 
-        colon = arg.rfind(':')
-        funcname = None
-
-        if colon >= 0:
-            filename = arg[:colon].rstrip()
-            f = self.lookupmodule(filename)
-            if not f:
-                print('*** ', repr(filename))
-                print('not found from sys.path')
-                return
-            else:
-                filename = f
-            arg = arg[colon+1:].lstrip()
-            try:
-                lineno = int(arg)
-            except ValueError as msg:
-                print('*** Bad lineno:', arg)
-                return
-        else:
-            # no colon; can be lineno or function
-            try:
-                lineno = int(arg)
-            except ValueError:
-                try:
-                    func = eval(arg,
-                                self.curframe.f_globals,
-                                self.curframe_locals)
-                except:
-                    func = arg
-                try:
-                    if hasattr(func, '__func__'):
-                        func = func.__func__
-                    code = func.__code__
-                    #use co_name to identify the bkpt (function names
-                    #could be aliased, but co_name is invariant)
-                    funcname = code.co_name
-                    lineno = code.co_firstlineno
-                    filename = code.co_filename
-                except:
-                    # last thing to try
-                    (ok, filename, ln) = self.lineinfo(arg)
-                    if not ok:
-                        print('*** The specified object')
-                        print(repr(arg))
-                        print('is not a function')
-                        print('or was not found along sys.path.')
-                        return
-                    funcname = ok # ok contains a function name
-                    lineno = int(ln)
-        if not filename:
-            filename = self.defaultFile()
+    def do_snapshot(self, arg, temporary=0):
+        snapshotting.Savepoint()
+    
+    def do_restore(self, arg):
+        try:
+            id = int(arg)
+        except:
+             print('You need to supply an index, e.g. restore 0')
+             return
+        # print('restore {0}'.format(arg))
+        self.mp.activatesp(id)
+        # self.set_quit()
+        print('raise EpdbExit()')
+        raise EpdbExit()
+    
+    def do_snapshots(self, arg):
+        self.mp.list_savepoints()
         
-        line = self.checkline(filename, lineno)
-        if line:
-            # now set the save point
-            err = self.set_save(filename, line, temporary, cond, funcname)
-            if err:
-                print('***', err)
-            #else:
-            #    bp = self.get_breaks(filename, line)[-1]
-            #    print("Breakpoint %d at %s:%d" % (bp.number,
-            #                                      bp.file,
-            #                                      bp.line))
+    def set_quit(self):
+        print('quit set')
+        self.mp.quit()
+        pdb.Pdb.set_quit(self)
 
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)
@@ -244,10 +282,15 @@ def main():
             print("Restarting", mainpyfile, "with arguments:")
             print("\t" + " ".join(sys.argv[1:]))
         except SystemExit:
+            print('SystemExit caught')
             # In most cases SystemExit does not warrant a post-mortem session.
             pass
             #print("The program exited via sys.exit(). Exit status: ", end=' ')
             #print(sys.exc_info()[1])
+        except EpdbExit:
+            print('EpdbExit caught')
+            break
+            # sys.exit(0)
         except:
             traceback.print_exc()
             print("Uncaught exception. Entering post mortem debugging")
@@ -257,7 +300,8 @@ def main():
             
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
-
+            
+    print('Loop finished')
 
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':

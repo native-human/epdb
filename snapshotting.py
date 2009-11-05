@@ -11,7 +11,7 @@ SOCK_NAME = "/tmp/socketname"
 log = logging.getLogger('socket.test')
 log.addHandler(logging.StreamHandler(sys.stderr))
 log.setLevel(logging.DEBUG)
-    
+
 class Savepoint:
     def __init__(self):
         #log.info('Savepoint fork')
@@ -23,7 +23,12 @@ class Savepoint:
         s.connect(SOCK_NAME)
         sck = Mysocket(s)
         sck.mysend('savepoint')
-        if sck.myrecv() != 'ok':
+        msg = sck.myrecv()
+        args = msg.split(' ')
+        cmd = args[0]
+        self.id = int(args[1])
+        log.info("got id {0}".format(self.id))
+        if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
         
@@ -52,7 +57,7 @@ class Savepoint:
         else:
             log.info('childpid %d'% pid)
             pass
-    
+        
 class Mysocket:
     def __init__(self, sock=None):
         self.MSG_LEN = 15
@@ -72,9 +77,6 @@ class Mysocket:
             trail = b'\n' * (self.MSG_LEN - len(msg))
             msg = msg + trail
             
-        #log.info('____')
-        #log.info(msg)
-        #log.info('____')
         totalsent = 0
         while totalsent < self.MSG_LEN:
             sent = self.sock.send(msg[totalsent:])
@@ -95,12 +97,11 @@ class Mysocket:
         return msg.rstrip()
     def close(self):
         self.sock.close()
-
-
-
+        
 class SavepointConnection:
-    def __init__(self, mysocket):
+    def __init__(self, mysocket, id):
         self.mysocket = mysocket
+        self.id = id
     
     def respond(self):
         cmd = self.mysocket.myrecv()
@@ -111,7 +112,7 @@ class SavepointConnection:
     
     def quit(self):
         self.mysocket.mysend('close')
-
+        
 class MainProcess:
     def __init__(self):
         #log.info("start process")
@@ -128,6 +129,7 @@ class MainProcess:
         self.do_quit = False
         pid = os.fork()
         if pid:
+            max_id = 0
             p = select.poll()
             #log.info('Socket: %s' % controller.sock)
             p.register(controller.sock, select.POLLIN|select.POLLPRI)
@@ -160,16 +162,23 @@ class MainProcess:
                             self.do_quit = True
                             #os.unlink(SOCK_NAME)
                             #sys.exit(0)
-                        if cmd == 'connect':
+                        elif cmd == 'connect':
                             #log.info("connect received")
                             arg = words[1]
                             controller.mysend("Connected " + arg)
-                        if cmd == 'showlist':
+                        elif cmd == 'showlist':
                             log.info('Len: %d' % len(self.savepoint_connections))
-                        if cmd == 'activate':
+                            for s in self.savepoint_connections:
+                                log.info(s.id)
+                            controller.mysend('ok')
+                        elif cmd == 'activate':
                             #log.info("ACTIVATE")
                             arg = int(words[1])
                             #log.info("activate %d"%arg)
+                            for s in self.savepoint_connections:
+                                if s.id == arg:
+                                    sp = s
+                                    break
                             sp = self.savepoint_connections[arg]
                             sp.activate()
                         else:
@@ -182,9 +191,10 @@ class MainProcess:
                         sock = Mysocket(conn)
                         type = sock.myrecv()
                         if type == 'savepoint':
-                            sp = SavepointConnection(sock)
+                            sp = SavepointConnection(sock, max_id)
                             self.savepoint_connections.append(sp)
-                            sock.mysend('ok')
+                            sock.mysend('ok {0}'.format(max_id))
+                            max_id += 1
                             #log.info('savepoint added')
                             if self.do_quit:
                                 sp.quit()
@@ -211,40 +221,41 @@ class MainProcess:
     
     def list_savepoints(self):
         self.debuggee.mysend('showlist')
+        reply = self.debuggee.myrecv()
+        if reply != 'ok':
+            raise Exception()
     
     def quit(self):
         self.debuggee.mysend('end')
         
-    def activatesp(self, idx=0):
-        # TODO idx
-        self.debuggee.mysend('activate 0')
+    def activatesp(self, id):
+        self.debuggee.mysend('activate {0}'.format(id))
         self.debuggee.close()
-        sys.exit(0)
+        #sys.exit(0)
         
-      
-mp = MainProcess()
- 
-log.info("line1")
-log.info("Create Savepoint")
-sp1 = Savepoint()
-log.info("Savepoint created")
-log.info("line2") 
-
-mp.list_savepoints()
-
-skip = input('>> Activate Sp? ')
-if skip != 'True':
-    log.info('>> Activate')
-    mp.activatesp()
-log.info('Skipped: "%s"'%skip)
-#mp.list_savepoints()
- 
-log.info('last') 
- 
-#log.info('Show list')
-#mp.list_savepoints() 
-
-mp.quit()
-
-log.info('main quit')
-sys.exit(0)
+#mp = MainProcess()
+# 
+#log.info("line1")
+#log.info("Create Savepoint")
+#sp1 = Savepoint()
+##log.info("Savepoint created")
+#log.info("line2") 
+#sp2 = Savepoint()
+#log.info("line3")
+#
+#skip = input('>> Skip Sp Aktivation? ')
+#if skip != 'True':
+#    log.info('>> Activate Sp')
+#    mp.activatesp(sp1.id)
+#log.info('Skipped: "%s"'%skip)
+##mp.list_savepoints()
+# 
+#log.info('last') 
+# 
+##log.info('Show list')
+##mp.list_savepoints() 
+#
+#mp.quit()
+#
+#log.info('main quit')
+#sys.exit(0)
