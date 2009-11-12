@@ -5,29 +5,46 @@ import os
 import sys
 import select
 import logging
-
-SOCK_NAME = "/tmp/socketname"
+import tempfile
 
 log = logging.getLogger('socket.test')
 log.addHandler(logging.StreamHandler(sys.stderr))
 log.setLevel(logging.DEBUG)
 
-class Savepoint:
-    def __init__(self):
+tmpfd, tmppath = tempfile.mkstemp(".dbg")
+log.info("tmppath: " + tmppath)
+
+SOCK_DIR = tempfile.mkdtemp()
+
+SOCK_NAME = os.path.join(SOCK_DIR, 'debug')
+#SOCK_NAME = tmppath
+
+class SnapshotExit(Exception):
+    """Raised when the controller process exits"""
+    pass
+
+class ControllerExit(Exception):
+    """Raised when the controller process exits"""
+    pass
+
+
+class Snapshot:
+    def __init__(self, ic, psnapshot):
         #log.info('Savepoint fork')
         #log.info('parentpid: %d %d' % (pid, os.getpid()))
-        
+        self.ic = ic
+        self.psnapshot = psnapshot
         # This is done before forking because of synchronization
         self.cpids = []
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(SOCK_NAME)
-        sck = Mysocket(s)
-        sck.mysend('savepoint')
-        msg = sck.myrecv()
+        msging = Messaging(s)
+        msging.send('savepoint {0} {1}'.format(self.ic, psnapshot))
+        msg = msging.recv()
         args = msg.split(' ')
         cmd = args[0]
         self.id = int(args[1])
-        log.info("got id {0}".format(self.id))
+        log.info("Made a snapshot with id {0}".format(self.id))
         if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
@@ -38,7 +55,7 @@ class Savepoint:
             # Parent
             self.cpids.append(pid)
             while True:
-                item = sck.myrecv()
+                item = msging.recv()
                 if item == "close":
                     #log.info('Savepoint quit ... Wait for subprocess')
                     while self.cpids != []:
@@ -46,7 +63,8 @@ class Savepoint:
                         idx = self.cpids.index(pid)
                         del self.cpids[idx]
                     #log.info('Savepoint quit')
-                    sys.exit(0)
+                    raise SnapshotExit()
+                    # sys.exit(0)
                 if item == "run":
                     rpid = os.fork()
                     if rpid:
@@ -55,12 +73,14 @@ class Savepoint:
                         #log.info("Child process runs")
                         break
         else:
-            log.info('childpid %d'% pid)
+            #log.info('childpid %d'% pid)
             pass
         
-class Mysocket:
+class Messaging:
+    """This is wrapper around sockets, which allow to send and receive fixed
+    length messages"""
     def __init__(self, sock=None):
-        self.MSG_LEN = 15
+        self.MSG_LEN = 30
         if sock is None:
             self.sock = socket.socket(
                 socket.AF_INET, socket.SOCK_STREAM)
@@ -68,7 +88,7 @@ class Mysocket:
             self.sock = sock
     def connect(self,host, port):
         self.sock.connect((host, port))
-    def mysend(self, msg):
+    def send(self, msg):
         if hasattr(msg, 'encode'):
             msg = msg.encode('ascii')
         if len(msg) > self.MSG_LEN:
@@ -85,7 +105,7 @@ class Mysocket:
                 raise RuntimeError("socket connection broken")
             totalsent = totalsent + sent
             
-    def myrecv(self):
+    def recv(self):
         msg = b''
         while len(msg) < self.MSG_LEN:
             chunk = self.sock.recv(self.MSG_LEN-len(msg))
@@ -99,27 +119,31 @@ class Mysocket:
         self.sock.close()
         
 class SavepointConnection:
-    def __init__(self, mysocket, id):
-        self.mysocket = mysocket
+    def __init__(self, msging, id, ic, psnapshot):
+        self.msging = msging
         self.id = id
+        self.ic = ic
+        self.psnapshot = psnapshot
     
     def respond(self):
-        cmd = self.mysocket.myrecv()
+        cmd = self.msging.recv()
         logging.info('cmd')
     
     def activate(self):
-        self.mysocket.mysend('run')
+        self.msging.send('run')
     
     def quit(self):
-        self.mysocket.mysend('close')
+        self.msging.send('close')
         
 class MainProcess:
+    """This class forks the controller process. The controller process ends up
+    in a loop. The other process returns with a connection to the controller"""
     def __init__(self):
         #log.info("start process")
         debuggee_sock, controller_sock = socket.socketpair()
-        debuggee = Mysocket(debuggee_sock)
+        debuggee = Messaging(debuggee_sock)
         self.debuggee = debuggee
-        controller = Mysocket(controller_sock)
+        controller = Messaging(controller_sock)
         backupcontroller = controller # TODO remove
         sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sp_sock.bind(SOCK_NAME)
@@ -149,7 +173,7 @@ class MainProcess:
                     
                     if fd == controller.sock.fileno():
                         #log.info('controller fd: %d' % controller.sock.fileno())
-                        line = controller.myrecv()
+                        line = controller.recv()
                         #log.info('line: %s:' % line)
                         words = line.rstrip().split(" ")
                         cmd = str(words[0])
@@ -165,12 +189,15 @@ class MainProcess:
                         elif cmd == 'connect':
                             #log.info("connect received")
                             arg = words[1]
-                            controller.mysend("Connected " + arg)
+                            controller.send("Connected " + arg)
                         elif cmd == 'showlist':
-                            log.info('Len: %d' % len(self.savepoint_connections))
+                            log.info('ID           InstructionNr    PSnapshot')
+                            log.info('----------------------------')
                             for s in self.savepoint_connections:
-                                log.info(s.id)
-                            controller.mysend('ok')
+                                log.info("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
+                            log.info('Number of snapshots: %d' %
+                                     len(self.savepoint_connections))
+                            controller.send('ok')
                         elif cmd == 'activate':
                             #log.info("ACTIVATE")
                             arg = int(words[1])
@@ -188,12 +215,20 @@ class MainProcess:
                     elif fd == sp_sock.fileno():
                         #log.info('new connection')
                         conn, addr = sp_sock.accept()
-                        sock = Mysocket(conn)
-                        type = sock.myrecv()
+                        msging = Messaging(conn)
+                        msg = msging.recv().split()
+                        type = msg[0]
                         if type == 'savepoint':
-                            sp = SavepointConnection(sock, max_id)
+                            arg1 = msg[1]
+                            arg2 = msg[2]
+                            if arg2 == 'None':
+                                psnapshot = None
+                            else:
+                                psnapshot = int(arg2)
+                            ic = int(arg1)
+                            sp = SavepointConnection(msging, max_id, ic, psnapshot)
                             self.savepoint_connections.append(sp)
-                            sock.mysend('ok {0}'.format(max_id))
+                            msging.send('ok {0}'.format(max_id))
                             max_id += 1
                             #log.info('savepoint added')
                             if self.do_quit:
@@ -207,11 +242,10 @@ class MainProcess:
                             log.info("Critical Error")
                     else:
                         for conn in self.savepoint_connections:
-                            if fd == conn.mysocket.sock.fileno():
+                            if fd == conn.msging.sock.fileno():
                                 conn.respond()
                                 break
                         else:
-                            #got = backupcontroller.myrecv()
                             #log.info("Additionally got: %s" % got)
                             log.info('Unknown fd: %s' % fd)
                             os.unlink(SOCK_NAME)
@@ -220,16 +254,17 @@ class MainProcess:
             pass
     
     def list_savepoints(self):
-        self.debuggee.mysend('showlist')
-        reply = self.debuggee.myrecv()
+        """Tell the controller to list all snapshots."""
+        self.debuggee.send('showlist')
+        reply = self.debuggee.recv()
         if reply != 'ok':
             raise Exception()
     
     def quit(self):
-        self.debuggee.mysend('end')
+        self.debuggee.send('end')
         
     def activatesp(self, id):
-        self.debuggee.mysend('activate {0}'.format(id))
+        self.debuggee.send('activate {0}'.format(id))
         self.debuggee.close()
         #sys.exit(0)
         

@@ -17,36 +17,39 @@ class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
     pass
 
-#class Savepoint:
-#    spbynumber = [None]
-#    def __init__(self, lineno):
-#        print('Savepoint created: {0}'.format(lineno))
-#        self.lineno = lineno
-#        self.spbynumber.append(self)
-#    def spprint(self, out = None):
-#        if out == None:
-#            out = sys.stdout
-#        print('Savepoint %d' % self.lineno)
-    
-
-
 class Epdb(pdb.Pdb):
     def __init__(self):
-        self.mp = snapshotting.MainProcess()
         pdb.Pdb.__init__(self)
+        self.ic = 0             # Instruction Counter
+        self.init_reversible()
+        
+    def init_reversible(self):
+        self.mp = snapshotting.MainProcess()
+        self.psnapshot = None # TODO parent snapshots
         self.prompt = '(Edpb) '
+        self.stopafter = -1
         
     def _runscript(self, filename):
         # print('_runscript')
         pdb.Pdb._runscript(self, filename)
     
+    def trace_dispatch(self, frame, event, arg):
+        print("trace_dispatch")
+        return pdb.Pdb.trace_dispatch(self, frame, event, arg)
+    
     def dispatch_line(self, frame):
-        #print('Line is going to be dispatched: ', frame.f_lineno)
+        print('Line is going to be dispatched: ', frame.f_lineno)
+        self.ic += 1
+        if self.stopafter == 0:
+            print('stopafter triggered')
+            self.set_trace()
+        elif self.stopafter > 0:
+            self.stopafter -= 1
         return pdb.Pdb.dispatch_line(self, frame)    
     
-    def set_save(self, filename, lineno, temporary=0, cond = None,
-                  funcname=None):
-        sp = Savepoint(lineno)
+    #def set_save(self, filename, lineno, temporary=0, cond = None,
+    #              funcname=None):
+    #    sp = Savepoint(lineno)
     
     def stop_here(self, frame):
         #print('Stop here')
@@ -61,121 +64,10 @@ class Epdb(pdb.Pdb):
             #print('Breakpoint found')
             return True
         return False
-        
-        #filename = self.canonic(frame.f_code.co_filename)
-        #if not filename in self.breaks:
-        #    return False
-        #lineno = frame.f_lineno
-        #if not lineno in self.breaks[filename]:
-        #    # The line itself has no breakpoint, but maybe the line is the
-        #    # first line of a function with breakpoint set by function name.
-        #    lineno = frame.f_code.co_firstlineno
-        #    if not lineno in self.breaks[filename]:
-        #        return False
-        #
-        ## flag says ok to delete temp. bp
-        #(bp, flag) = effective(filename, lineno, frame)
-        #if bp:
-        #    self.currentbp = bp.number
-        #    if (flag and bp.temporary):
-        #        self.do_clear(str(bp.number))
-        #    return True
-        #else:
-        #    return False
-    
-    #def do_savepoint(self, arg, temporary=0):
-    #    # savepoint [ ([filename:]lineno | function) [, "condition"] ]
-    #    if not arg:
-    #        print('Show savepoints')
-    #        for sp in Savepoint.spbynumber:
-    #            if sp:
-    #                sp.spprint()
-    #        return
-    #    #elif len(arg) == 1:
-    #    #    lineno = 0            
-    #    #    #try:
-    #    #    #    lineno = int(arg)
-    #    #    #except ValueError as msg:
-    #    #    #    print('*** Bad lineno:', arg, file=self.stdout)
-    #    #    #    return
-    #    #    sp = Savepoint(lineno)
-    #    
-    #    filename = None
-    #    lineno = None
-    #    cond = None
-    #    
-    #    comma = arg.find(',')
-    #    if comma > 0:
-    #        # parse stuff after comma: "condition"
-    #        cond = arg[comma+1:].lstrip()
-    #        arg = arg[:comma].rstrip()
-    #
-    #    colon = arg.rfind(':')
-    #    funcname = None
-    #
-    #    if colon >= 0:
-    #        filename = arg[:colon].rstrip()
-    #        f = self.lookupmodule(filename)
-    #        if not f:
-    #            print('*** ', repr(filename))
-    #            print('not found from sys.path')
-    #            return
-    #        else:
-    #            filename = f
-    #        arg = arg[colon+1:].lstrip()
-    #        try:
-    #            lineno = int(arg)
-    #        except ValueError as msg:
-    #            print('*** Bad lineno:', arg)
-    #            return
-    #    else:
-    #        # no colon; can be lineno or function
-    #        try:
-    #            lineno = int(arg)
-    #        except ValueError:
-    #            try:
-    #                func = eval(arg,
-    #                            self.curframe.f_globals,
-    #                            self.curframe_locals)
-    #            except:
-    #                func = arg
-    #            try:
-    #                if hasattr(func, '__func__'):
-    #                    func = func.__func__
-    #                code = func.__code__
-    #                #use co_name to identify the bkpt (function names
-    #                #could be aliased, but co_name is invariant)
-    #                funcname = code.co_name
-    #                lineno = code.co_firstlineno
-    #                filename = code.co_filename
-    #            except:
-    #                # last thing to try
-    #                (ok, filename, ln) = self.lineinfo(arg)
-    #                if not ok:
-    #                    print('*** The specified object')
-    #                    print(repr(arg))
-    #                    print('is not a function')
-    #                    print('or was not found along sys.path.')
-    #                    return
-    #                funcname = ok # ok contains a function name
-    #                lineno = int(ln)
-    #    if not filename:
-    #        filename = self.defaultFile()
-    #    
-    #    line = self.checkline(filename, lineno)
-    #    if line:
-    #        # now set the save point
-    #        err = self.set_save(filename, line, temporary, cond, funcname)
-    #        if err:
-    #            print('***', err)
-    #        #else:
-    #        #    bp = self.get_breaks(filename, line)[-1]
-    #        #    print("Breakpoint %d at %s:%d" % (bp.number,
-    #        #                                      bp.file,
-    #        #                                      bp.line))
 
     def do_snapshot(self, arg, temporary=0):
-        snapshotting.Savepoint()
+        snapshot = snapshotting.Snapshot(self.ic, self.psnapshot)
+        self.psnapshot = snapshot.id
     
     def do_restore(self, arg):
         try:
@@ -189,8 +81,23 @@ class Epdb(pdb.Pdb):
         print('raise EpdbExit()')
         raise EpdbExit()
     
+    def do_epdbexit(self, arg):
+        raise EpdbExit()
+    
     def do_snapshots(self, arg):
         self.mp.list_savepoints()
+    
+    def do_stopafter(self, arg):
+        steps = int(arg)
+        self.stopafter = steps
+    
+    def do_init(self, arg):
+        self.init_reversible()
+        
+    def do_quit(self, arg):
+        self._user_requested_quit = 1
+        self.set_quit()
+        return 1
         
     def set_quit(self):
         print('quit set')
@@ -288,9 +195,15 @@ def main():
             #print("The program exited via sys.exit(). Exit status: ", end=' ')
             #print(sys.exc_info()[1])
         except EpdbExit:
-            print('EpdbExit caught')
+            #print('EpdbExit caught')
             break
             # sys.exit(0)
+        except snapshotting.ControllerExit:
+            print('ControllerExit caught')
+            break
+        except snapshotting.SnapshotExit:
+            print('SnapshotExit caught')
+            break
         except:
             traceback.print_exc()
             print("Uncaught exception. Entering post mortem debugging")
@@ -301,9 +214,10 @@ def main():
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
             
-    print('Loop finished')
+
 
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
     import epdb
     epdb.main()
+    print('Loop finished')
