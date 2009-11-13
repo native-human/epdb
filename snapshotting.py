@@ -39,7 +39,7 @@ class Snapshot:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(SOCK_NAME)
         msging = Messaging(s)
-        msging.send('savepoint {0} {1}'.format(self.ic, psnapshot))
+        msging.send('snapshot {0} {1}'.format(self.ic, psnapshot))
         msg = msging.recv()
         args = msg.split(' ')
         cmd = args[0]
@@ -55,8 +55,10 @@ class Snapshot:
             # Parent
             self.cpids.append(pid)
             while True:
-                item = msging.recv()
-                if item == "close":
+                msg = msging.recv()
+                args = msg.split()
+                cmd = args[0]
+                if cmd == "close":
                     #log.info('Savepoint quit ... Wait for subprocess')
                     while self.cpids != []:
                         (pid,status) = os.wait()
@@ -65,16 +67,18 @@ class Snapshot:
                     #log.info('Savepoint quit')
                     raise SnapshotExit()
                     # sys.exit(0)
-                if item == "run":
+                if cmd == "run":
+                    steps = int(args[1])
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
                     else:    
                         #log.info("Child process runs")
+                        self.step_forward = steps
                         break
         else:
             #log.info('childpid %d'% pid)
-            pass
+            self.step_forward = -1
         
 class Messaging:
     """This is wrapper around sockets, which allow to send and receive fixed
@@ -129,8 +133,9 @@ class SavepointConnection:
         cmd = self.msging.recv()
         logging.info('cmd')
     
-    def activate(self):
-        self.msging.send('run')
+    def activate(self, steps=-1):
+        log.info('Activate Savepoint with {0}'.format(steps))
+        self.msging.send('run {0}'.format(steps))
     
     def quit(self):
         self.msging.send('close')
@@ -200,14 +205,15 @@ class MainProcess:
                             controller.send('ok')
                         elif cmd == 'activate':
                             #log.info("ACTIVATE")
-                            arg = int(words[1])
+                            spid = int(words[1])
+                            steps = int(words[2])
                             #log.info("activate %d"%arg)
                             for s in self.savepoint_connections:
-                                if s.id == arg:
+                                if s.id == spid:
                                     sp = s
                                     break
-                            sp = self.savepoint_connections[arg]
-                            sp.activate()
+                            sp = self.savepoint_connections[spid]
+                            sp.activate(steps)
                         else:
                             log.info(cmd)
                             
@@ -218,7 +224,7 @@ class MainProcess:
                         msging = Messaging(conn)
                         msg = msging.recv().split()
                         type = msg[0]
-                        if type == 'savepoint':
+                        if type == 'snapshot':
                             arg1 = msg[1]
                             arg2 = msg[2]
                             if arg2 == 'None':
@@ -233,11 +239,6 @@ class MainProcess:
                             #log.info('savepoint added')
                             if self.do_quit:
                                 sp.quit()
-                        
-                        elif type == 'debuggee':
-                            # TODO remove
-                            pass
-                            #log.info("New Debuggee")
                         else:
                             log.info("Critical Error")
                     else:
@@ -263,12 +264,13 @@ class MainProcess:
     def quit(self):
         self.debuggee.send('end')
         
-    def activatesp(self, id):
-        self.debuggee.send('activate {0}'.format(id))
+    def activatesp(self, id, steps=-1):
+        log.info('activate {0} {1}'.format(id,steps))
+        self.debuggee.send('activate {0} {1}'.format(id,steps))
         self.debuggee.close()
         #sys.exit(0)
         
-#mp = MainProcess()
+#tmp = MainProcess()
 # 
 #log.info("line1")
 #log.info("Create Savepoint")

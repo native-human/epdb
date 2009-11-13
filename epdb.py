@@ -20,12 +20,16 @@ class EpdbExit(Exception):
 class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self)
-        self.ic = 0             # Instruction Counter
         self.init_reversible()
         
     def init_reversible(self):
         self.mp = snapshotting.MainProcess()
+        
+        self.ic = 0             # Instruction Counter
+        self.pss_ic = 0
+        
         self.psnapshot = None # TODO parent snapshots
+        self.psnapshot_id = None
         self.prompt = '(Edpb) '
         self.stopafter = -1
         
@@ -34,22 +38,21 @@ class Epdb(pdb.Pdb):
         pdb.Pdb._runscript(self, filename)
     
     def trace_dispatch(self, frame, event, arg):
-        print("trace_dispatch")
+        # print("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
     
     def dispatch_line(self, frame):
-        print('Line is going to be dispatched: ', frame.f_lineno)
+        # print('Line is going to be dispatched: ', frame.f_lineno)
         self.ic += 1
+        # print('Line is going to be dispatched: ', self.ic)
+        
+        if self.stopafter > 0:
+            self.stopafter -= 1
+        
         if self.stopafter == 0:
             print('stopafter triggered')
             self.set_trace()
-        elif self.stopafter > 0:
-            self.stopafter -= 1
         return pdb.Pdb.dispatch_line(self, frame)    
-    
-    #def set_save(self, filename, lineno, temporary=0, cond = None,
-    #              funcname=None):
-    #    sp = Savepoint(lineno)
     
     def stop_here(self, frame):
         #print('Stop here')
@@ -65,9 +68,22 @@ class Epdb(pdb.Pdb):
             return True
         return False
 
+    def set_continue(self):
+        # Debugger overhead needed to count instructions
+        self._set_stopinfo(self.botframe, None)
+
     def do_snapshot(self, arg, temporary=0):
-        snapshot = snapshotting.Snapshot(self.ic, self.psnapshot)
-        self.psnapshot = snapshot.id
+        snapshot = snapshotting.Snapshot(self.ic, self.psnapshot_id)
+        self.psnapshot = snapshot
+        self.psnapshot_id = snapshot.id
+        self.pss_ic = self.ic
+        # print("step_forward: {0}".format(snapshot.step_forward))
+        if snapshot.step_forward > 0:
+            self.stopafter = snapshot.step_forward
+            self.set_continue()
+            return 1
+        else:
+            return
     
     def do_restore(self, arg):
         try:
@@ -78,7 +94,7 @@ class Epdb(pdb.Pdb):
         # print('restore {0}'.format(arg))
         self.mp.activatesp(id)
         # self.set_quit()
-        print('raise EpdbExit()')
+        #print('raise EpdbExit()')
         raise EpdbExit()
     
     def do_epdbexit(self, arg):
@@ -98,9 +114,31 @@ class Epdb(pdb.Pdb):
         self._user_requested_quit = 1
         self.set_quit()
         return 1
+    
+    def do_stepback(self, arg):
+        actual_ic = self.ic
+        parent_ic = self.pss_ic
+        steps = actual_ic - parent_ic - 1
+        
+        psnapshot = self.psnapshot
+        
+        if parent_ic == actual_ic:
+            # Position is at a snapshot. Go to parent snapshot and step forward.
+            # TODO
+            print('At a snapshot. Backstepping over a snapshot not implemented yet')
+            return
+        
+        if psnapshot == None:
+            # TODO
+            print('No parent snapshot. Backstepping without parent snapshot not implemented yet')
+            return
+        
+        self.mp.activatesp(psnapshot.id, steps)
+        raise EpdbExit()
+        
         
     def set_quit(self):
-        print('quit set')
+        # print('quit set')
         self.mp.quit()
         pdb.Pdb.set_quit(self)
 
@@ -199,10 +237,10 @@ def main():
             break
             # sys.exit(0)
         except snapshotting.ControllerExit:
-            print('ControllerExit caught')
+            #print('ControllerExit caught')
             break
         except snapshotting.SnapshotExit:
-            print('SnapshotExit caught')
+            #print('SnapshotExit caught')
             break
         except:
             traceback.print_exc()
@@ -220,4 +258,4 @@ def main():
 if __name__ == '__main__':
     import epdb
     epdb.main()
-    print('Loop finished')
+    #print('Loop finished')
