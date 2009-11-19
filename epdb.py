@@ -23,12 +23,6 @@ class side_effects:
         def newfunc(*args, **kargs):
             f = {'replay':self.replay, 'undo':self.undo, 'normal':func}[mode]
             return f(*args, **kargs)
-            #if mode == 'replay':
-            #    # print('replay')
-            #    return self.replay(*args, **kargs)
-            #elif mode == 'undo':
-            #    return self.undo(*args, **kargs)
-            #return func(*args, **kargs)
         newfunc.__debug__ = True
         return newfunc
     __call__.__debug__ = True
@@ -56,10 +50,15 @@ class Epdb(pdb.Pdb):
         self.mp = snapshotting.MainProcess()
         
         self.ic = 0             # Instruction Counter
-        self.pss_ic = 0
         
+        self.ss_ic = 0
+        self.snapshot = None
+        self.snapshot_id = None
+        
+        self.pss_ic = 0
         self.psnapshot = None
         self.psnapshot_id = None
+        
         self.prompt = '(Edpb) '
         self.stopafter = -1
     
@@ -161,10 +160,13 @@ class Epdb(pdb.Pdb):
 
     def do_snapshot(self, arg, temporary=0):
         global mode
-        snapshot = snapshotting.Snapshot(self.ic, self.psnapshot_id)
-        self.psnapshot = snapshot
-        self.psnapshot_id = snapshot.id
-        self.pss_ic = self.ic
+        snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
+        self.psnapshot = self.snapshot
+        self.psnapshot_id = self.snapshot_id
+        self.pss_ic = self.ss_ic
+        self.snapshot = snapshot
+        self.snapshot_id = snapshot.id
+        self.ss_ic = self.ic
         # print("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             mode = 'replay'
@@ -207,27 +209,38 @@ class Epdb(pdb.Pdb):
     
     def do_stepback(self, arg):
         actual_ic = self.ic
-        parent_ic = self.pss_ic
-        steps = actual_ic - parent_ic - 1
+        snapshot_ic = self.ss_ic
+        steps = actual_ic - snapshot_ic - 1
         
-        psnapshot = self.psnapshot
+        snapshot = self.snapshot
         
-        if parent_ic == actual_ic:
+        if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
-            print('At a snapshot. Backstepping over a snapshot not implemented yet')
-            return
+            # print('At a snapshot. Backstepping over a snapshot not implemented yet')
+            if self.psnapshot == None:
+                print('Backstepping over a snapshot to the beginning of the program not implemented yet.')
+                self.snapshot = None
+                self.psnapshot = None
+                mode = 'replay'
+                self.stopafter = steps
+                pdb.Pdb.do_run(self, None) # raises restart exception
+                # return    
+            steps = actual_ic - self.pss_ic - 1
+            self.mp.activatesp(self.psnapshot.id, steps)
+            raise EpdbExit()
+            
         
-        if psnapshot == None:
-            # TODO instruction count is not the correct indicator.
+        if snapshot == None:
+            # TODO instruction count is not the correct indicator, for some reason -> check it
             if actual_ic == 0:
                 print("Can't step back. At the beginning of the program")
             mode = 'replay'
             self.stopafter = steps
-            pdb.Pdb.do_run(self, None)
+            pdb.Pdb.do_run(self, None) # do_run raises a restart exception
             #return
         
-        self.mp.activatesp(psnapshot.id, steps)
+        self.mp.activatesp(snapshot.id, steps)
         raise EpdbExit()
         
         
@@ -345,8 +358,6 @@ def main():
             
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
-            
-
 
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
