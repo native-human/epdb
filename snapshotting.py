@@ -134,7 +134,7 @@ class SavepointConnection:
         logging.info('cmd')
     
     def activate(self, steps=-1):
-        log.info('Activate Savepoint with {0}'.format(steps))
+        #log.info('Activate Savepoint with {0}'.format(steps))
         self.msging.send('run {0}'.format(steps))
     
     def quit(self):
@@ -265,7 +265,7 @@ class MainProcess:
         self.debuggee.send('end')
         
     def activatesp(self, id, steps=-1):
-        log.info('activate {0} {1}'.format(id,steps))
+        #log.info('activate {0} {1}'.format(id,steps))
         self.debuggee.send('activate {0} {1}'.format(id,steps))
         self.debuggee.close()
         #sys.exit(0)

@@ -13,6 +13,36 @@ import snapshotting
 __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
            "post_mortem", "help"]
 
+mode = 'normal'
+
+class side_effects:
+    def __init__(self, replay, undo):
+        self.replay = replay
+        self.undo = undo
+    def __call__(self, func):
+        def newfunc(*args, **kargs):
+            f = {'replay':self.replay, 'undo':self.undo, 'normal':func}[mode]
+            return f(*args, **kargs)
+            #if mode == 'replay':
+            #    # print('replay')
+            #    return self.replay(*args, **kargs)
+            #elif mode == 'undo':
+            #    return self.undo(*args, **kargs)
+            #return func(*args, **kargs)
+        newfunc.__debug__ = True
+        return newfunc
+    __call__.__debug__ = True
+
+
+def nothing(*args, **kargs):
+    return
+
+@side_effects(undo=nothing, replay=nothing)
+def println(*args, **kargs):
+    print (*args, **kargs)
+
+println('Test')
+
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
     pass
@@ -28,21 +58,33 @@ class Epdb(pdb.Pdb):
         self.ic = 0             # Instruction Counter
         self.pss_ic = 0
         
-        self.psnapshot = None # TODO parent snapshots
+        self.psnapshot = None
         self.psnapshot_id = None
         self.prompt = '(Edpb) '
         self.stopafter = -1
+    
+    def user_line(self, frame):
+        print('user_line')
+        if self.stopafter > 0:
+            print('return')
+            return
+        pdb.Pdb.user_line(self, frame)
         
     def _runscript(self, filename):
-        # print('_runscript')
+        #print('_runscript', self.stopafter)
+        self.ic = 0
         pdb.Pdb._runscript(self, filename)
+        #if self.stopafter > 0:
+        #    print('continue set')
+        #    self.set_continue()
     
     def trace_dispatch(self, frame, event, arg):
         # print("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
     
     def dispatch_line(self, frame):
-        # print('Line is going to be dispatched: ', frame.f_lineno)
+        global mode
+        #print('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, self.ic)
         self.ic += 1
         # print('Line is going to be dispatched: ', self.ic)
         
@@ -50,9 +92,54 @@ class Epdb(pdb.Pdb):
             self.stopafter -= 1
         
         if self.stopafter == 0:
-            print('stopafter triggered')
+            self.stopafter = -1
+            #print('mode normal')
+            mode = 'normal'
+            # print('stopafter triggered')
             self.set_trace()
-        return pdb.Pdb.dispatch_line(self, frame)    
+        return pdb.Pdb.dispatch_line(self, frame)
+    
+    def dispatch_call(self, frame, arg):
+        print('dispatch a call: ', frame.f_code.co_name)
+        
+        #if frame.f_code.co_name == 'blah':
+        #    print("inject code: ", self.curframe.f_lineno)
+
+        if self.botframe is None:
+            # print('self.botframe == None')
+            # First call of dispatch since reset()
+            self.botframe = frame.f_back # (CT) Note that this may also be None!
+            return self.trace_dispatch
+        # if not (self.stop_here(frame) or self.break_anywhere(frame)) :
+        #    # No need to trace this function
+        #    return # None
+        funcname = frame.f_code.co_name
+        try:
+            #isdebug = getattr(funcname, '__debug__')
+            if frame.f_code.co_filename == 'epdb.py':
+                isdebug = True
+                return
+            namespace = {}
+            namespace.update(frame.f_globals)
+            namespace.update(frame.f_locals)
+            namespace.update(frame.f_builtins)
+            funcobj = namespace[funcname]
+            isdebug = funcobj.__debug__
+            #print('getattr successful', isdebug)
+            if isdebug:
+                #print('debug method ', funcname)
+                return
+        except AttributeError:
+            pass
+            #print('AttrError', str(sorted(namespace.keys())))
+        except KeyError:
+            pass
+            #print('KeyError', str(sorted(namespace.keys())))
+        self.user_call(frame, arg)
+        if self.quitting: raise BdbQuit
+        return self.trace_dispatch
+
+        # return pdb.Pdb.dispatch_call(self, frame, arg)
     
     def stop_here(self, frame):
         #print('Stop here')
@@ -73,12 +160,15 @@ class Epdb(pdb.Pdb):
         self._set_stopinfo(self.botframe, None)
 
     def do_snapshot(self, arg, temporary=0):
+        global mode
         snapshot = snapshotting.Snapshot(self.ic, self.psnapshot_id)
         self.psnapshot = snapshot
         self.psnapshot_id = snapshot.id
         self.pss_ic = self.ic
         # print("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
+            mode = 'replay'
+            print ('mode replay')
             self.stopafter = snapshot.step_forward
             self.set_continue()
             return 1
@@ -129,9 +219,13 @@ class Epdb(pdb.Pdb):
             return
         
         if psnapshot == None:
-            # TODO
-            print('No parent snapshot. Backstepping without parent snapshot not implemented yet')
-            return
+            # TODO instruction count is not the correct indicator.
+            if actual_ic == 0:
+                print("Can't step back. At the beginning of the program")
+            mode = 'replay'
+            self.stopafter = steps
+            pdb.Pdb.do_run(self, None)
+            #return
         
         self.mp.activatesp(psnapshot.id, steps)
         raise EpdbExit()
