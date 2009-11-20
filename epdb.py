@@ -35,8 +35,6 @@ def nothing(*args, **kargs):
 def println(*args, **kargs):
     print (*args, **kargs)
 
-println('Test')
-
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
     pass
@@ -63,9 +61,9 @@ class Epdb(pdb.Pdb):
         self.stopafter = -1
     
     def user_line(self, frame):
-        print('user_line')
+        #print('user_line')
         if self.stopafter > 0:
-            print('return')
+            #print('return')
             return
         pdb.Pdb.user_line(self, frame)
         
@@ -99,7 +97,7 @@ class Epdb(pdb.Pdb):
         return pdb.Pdb.dispatch_line(self, frame)
     
     def dispatch_call(self, frame, arg):
-        print('dispatch a call: ', frame.f_code.co_name)
+        #print('dispatch a call: ', frame.f_code.co_name)
         
         #if frame.f_code.co_name == 'blah':
         #    print("inject code: ", self.curframe.f_lineno)
@@ -170,7 +168,7 @@ class Epdb(pdb.Pdb):
         # print("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             mode = 'replay'
-            print ('mode replay')
+            #print ('mode replay')
             self.stopafter = snapshot.step_forward
             self.set_continue()
             return 1
@@ -208,6 +206,7 @@ class Epdb(pdb.Pdb):
         return 1
     
     def do_stepback(self, arg):
+        global mode
         actual_ic = self.ic
         snapshot_ic = self.ss_ic
         steps = actual_ic - snapshot_ic - 1
@@ -219,13 +218,13 @@ class Epdb(pdb.Pdb):
             # TODO
             # print('At a snapshot. Backstepping over a snapshot not implemented yet')
             if self.psnapshot == None:
-                print('Backstepping over a snapshot to the beginning of the program not implemented yet.')
+                #print('Backstepping over a snapshot to the beginning of the program not implemented yet.')
                 self.snapshot = None
                 self.psnapshot = None
                 mode = 'replay'
                 self.stopafter = steps
                 pdb.Pdb.do_run(self, None) # raises restart exception
-                # return    
+                # return
             steps = actual_ic - self.pss_ic - 1
             self.mp.activatesp(self.psnapshot.id, steps)
             raise EpdbExit()
