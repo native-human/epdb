@@ -9,11 +9,52 @@ import re
 import pprint
 import traceback
 import snapshotting
+import builtins
+import types
+sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+import __dbg as dbg
+
+__pythonimport__ = builtins.__import__
 
 __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
            "post_mortem", "help"]
 
 mode = 'normal'
+
+def __import__(*args):
+    
+    #print('My import', args[0], args[3], args[4])
+    new = True
+    if args[0] in dbg.modules:
+        new = False
+    mod = __pythonimport__(*args)
+    #try:
+    #    getattr(mod, 'print')
+    #    print('Found')
+    #except:
+    #    pass
+    
+    if new:
+        dbg.modules.append(args[0])
+        print('new found', args[0], dbg.modules)
+        if args[0] == 'random':
+            print('Importing random')
+            #print(mod.__dict__)
+            #print(getattr(mod, 'randint'))
+            randmod = __pythonimport__('__random', globals(), locals(), [])
+            for key in randmod.__dict__.keys():
+                if key == 'random':
+                    continue
+                if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', '__dbg']:
+                    continue
+                setattr(mod, '__orig__'+key, getattr(mod,key))
+                setattr(mod, key, getattr(randmod, key))
+            print(mod.__dict__.keys())
+            #setattr(mod, 'randint', randint)
+        elif args[0] == 'builtins':
+            print('Print found')
+            #setattr(mod, 'print', myprint)
+    return mod
 
 class side_effects:
     def __init__(self, replay, undo):
@@ -31,9 +72,9 @@ class side_effects:
 def nothing(*args, **kargs):
     return
 
-@side_effects(undo=nothing, replay=nothing)
-def println(*args, **kargs):
-    print (*args, **kargs)
+#@side_effects(undo=nothing, replay=nothing)
+#def println(*args, **kargs):
+#    print(*args, **kargs)
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -43,11 +84,66 @@ class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self)
         self.init_reversible()
+    
+    def _runscript(self, filename):
+        # The script has to run in __main__ namespace (or imports from
+        # __main__ will break).
+        #
+        # So we clear up the __main__ and set several special variables
+        # (this gets rid of pdb's globals and cleans old variables on restarts).
+        import __main__
+        __main__.__dict__.clear()
+        __main__.__dict__.update({"__name__"    : "__main__",
+                                  "__file__"    : filename,
+                                  "__builtins__": __builtins__,
+                                 })
+
+        # When bdb sets tracing, a number of call and line events happens
+        # BEFORE debugger even reaches user's code (and the exact sequence of
+        # events depends on python version). So we take special measures to
+        # avoid stopping before we reach the main script (see user_line and
+        # user_call for details).
+        self._wait_for_mainpyfile = 1
+        self.mainpyfile = self.canonic(filename)
+        self._user_requested_quit = 0
+        globals = __main__.__dict__
+        locals = globals
+        sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+
+        with open(filename, "rb") as fp:
+            statement = "exec(compile(%r, %r, 'exec'))" % \
+                        (fp.read(), self.mainpyfile)
+        #print('Test')
+        #print(statement)
+        #print(self.mainpyfile)
+        
+        #self.reset()
+        self.quitting = 0
+        self.botframe = None
+        self.stopframe = None
+        self.returnframe = None
+        
+        sys.settrace(self.trace_dispatch)
+        builtins.__import__ = __import__
+        if not isinstance(cmd, types.CodeType):
+            statement = statement + '\n'
+        try:
+            exec(statement, globals, locals)
+        except bdb.BdbQuit:
+            pass
+        finally:
+            self.quitting = 1
+            sys.settrace(None)
+        
+        #self.run(statement)
         
     def init_reversible(self):
         self.mp = snapshotting.MainProcess()
         
-        self.ic = 0             # Instruction Counter
+        #self.ic = 0             # Instruction Counter
+        dbg.ic = 0
+        
+        self.starting_ic = None
         
         self.ss_ic = 0
         self.snapshot = None
@@ -67,22 +163,30 @@ class Epdb(pdb.Pdb):
             return
         pdb.Pdb.user_line(self, frame)
         
-    def _runscript(self, filename):
-        #print('_runscript', self.stopafter)
-        self.ic = 0
-        pdb.Pdb._runscript(self, filename)
-        #if self.stopafter > 0:
-        #    print('continue set')
-        #    self.set_continue()
+    #def _runscript(self, filename):
+    #    #print('_runscript', self.stopafter)
+    #    self.ic = 0
+    #    pdb.Pdb._runscript(self, filename)
+    #    #if self.stopafter > 0:
+    #    #    print('continue set')
+    #    #    self.set_continue()
     
     def trace_dispatch(self, frame, event, arg):
         # print("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
     
     def dispatch_line(self, frame):
-        global mode
+        #global mode
         #print('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, self.ic)
-        self.ic += 1
+        
+        #self.ic += 1
+        dbg.ic += 1
+        
+        if self.starting_ic is None:
+            if frame.f_code.co_filename == self.mainpyfile:
+                #self.starting_ic = self.ic
+                self.starting_ic = dbg.ic
+            #print(frame.f_code.co_filename, self.mainpyfile)
         # print('Line is going to be dispatched: ', self.ic)
         
         if self.stopafter > 0:
@@ -90,27 +194,35 @@ class Epdb(pdb.Pdb):
         
         if self.stopafter == 0:
             self.stopafter = -1
-            #print('mode normal')
-            mode = 'normal'
+            print(dbg.mode)
+            dbg.mode = 'normal'
             # print('stopafter triggered')
             self.set_trace()
+            
         return pdb.Pdb.dispatch_line(self, frame)
     
     def dispatch_call(self, frame, arg):
-        #print('dispatch a call: ', frame.f_code.co_name)
+        # print('dispatch a call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno)
         
         #if frame.f_code.co_name == 'blah':
         #    print("inject code: ", self.curframe.f_lineno)
 
         if self.botframe is None:
-            # print('self.botframe == None')
+            #print('self.botframe == None')
             # First call of dispatch since reset()
             self.botframe = frame.f_back # (CT) Note that this may also be None!
             return self.trace_dispatch
         # if not (self.stop_here(frame) or self.break_anywhere(frame)) :
         #    # No need to trace this function
         #    return # None
+        if os.path.basename(frame.f_code.co_filename).startswith('__'):
+            return
+        if os.path.basename(frame.f_code.co_filename) in ['random.py']:
+            return
+        #print(frame.f_code.co_filename)
+        
         funcname = frame.f_code.co_name
+        #print('Funcname', funcname)
         try:
             #isdebug = getattr(funcname, '__debug__')
             if frame.f_code.co_filename == 'epdb.py':
@@ -157,17 +269,19 @@ class Epdb(pdb.Pdb):
         self._set_stopinfo(self.botframe, None)
 
     def do_snapshot(self, arg, temporary=0):
-        global mode
-        snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
+        #global mode
+        #snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
+        snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
         self.snapshot = snapshot
         self.snapshot_id = snapshot.id
-        self.ss_ic = self.ic
+        # self.ss_ic = self.ic
+        self.ss_ic = dbg.ic
         # print("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
-            mode = 'replay'
+            dbg.mode = 'replay'
             #print ('mode replay')
             self.stopafter = snapshot.step_forward
             self.set_continue()
@@ -199,6 +313,10 @@ class Epdb(pdb.Pdb):
     
     def do_init(self, arg):
         self.init_reversible()
+    
+    def do_ic(self, arg):
+        #print('The instruction count is:', self.ic)
+        print('The instruction count is:', dbg.ic)
         
     def do_quit(self, arg):
         self._user_requested_quit = 1
@@ -206,8 +324,9 @@ class Epdb(pdb.Pdb):
         return 1
     
     def do_stepback(self, arg):
-        global mode
-        actual_ic = self.ic
+        #global mode
+        # actual_ic = self.ic
+        actual_ic = dbg.ic
         snapshot_ic = self.ss_ic
         steps = actual_ic - snapshot_ic - 1
         
@@ -216,12 +335,12 @@ class Epdb(pdb.Pdb):
         if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
-            # print('At a snapshot. Backstepping over a snapshot not implemented yet')
+            print('At a snapshot. Backstepping over a snapshot not implemented yet')
             if self.psnapshot == None:
                 #print('Backstepping over a snapshot to the beginning of the program not implemented yet.')
                 self.snapshot = None
                 self.psnapshot = None
-                mode = 'replay'
+                dbg.mode = 'replay'
                 self.stopafter = steps
                 pdb.Pdb.do_run(self, None) # raises restart exception
                 # return
@@ -231,10 +350,9 @@ class Epdb(pdb.Pdb):
             
         
         if snapshot == None:
-            # TODO instruction count is not the correct indicator, for some reason -> check it
-            if actual_ic == 0:
+            if actual_ic == self.starting_ic:
                 print("Can't step back. At the beginning of the program")
-            mode = 'replay'
+            dbg.mode = 'replay'
             self.stopafter = steps
             pdb.Pdb.do_run(self, None) # do_run raises a restart exception
             #return
@@ -325,6 +443,8 @@ def main():
     epdb = Epdb()
     while 1:
         try:
+            #epdb.ic = 0
+            dbg.ic = 0
             epdb._runscript(mainpyfile)
             if epdb._user_requested_quit:
                 break
