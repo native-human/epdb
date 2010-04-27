@@ -7,6 +7,10 @@ import select
 import logging
 import tempfile
 
+sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+import __dbg as dbg
+import shareddict
+
 log = logging.getLogger('socket.test')
 log.addHandler(logging.StreamHandler(sys.stderr))
 log.setLevel(logging.DEBUG)
@@ -75,8 +79,14 @@ class Snapshot:
                     else:    
                         #log.info("Child process runs")
                         self.step_forward = steps
+                        #print('Trying to connect to the server')
+                        #dbg.connect()
+                        dbg.sde = shareddict.DictProxy()
+                        #print('Connected')
                         break
         else:
+            #dbg.connect()
+            dbg.sde = shareddict.DictProxy()
             #log.info('childpid %d'% pid)
             self.step_forward = -1
         
@@ -156,8 +166,11 @@ class MainProcess:
         sp_sock.listen(10)
         self.savepoint_connections = []
         self.do_quit = False
+        sdpid = shareddict.server(dofork=True)
+        
         pid = os.fork()
         if pid:
+            #dbg.start_server()
             max_id = 0
             p = select.poll()
             #log.info('Socket: %s' % controller.sock)
@@ -167,6 +180,7 @@ class MainProcess:
                 list = p.poll(100)
                 if list == []:
                     if self.do_quit:
+                        shareddict.shutdown()
                         os.waitpid(pid,0)
                         os.unlink(SOCK_NAME)
                         #log.info('control quit')
@@ -252,7 +266,8 @@ class MainProcess:
                             os.unlink(SOCK_NAME)
                             sys.exit(0)
         else:
-            pass
+            #dbg.connect()
+            dbg.sde = shareddict.DictProxy()
     
     def list_savepoints(self):
         """Tell the controller to list all snapshots."""
@@ -266,6 +281,7 @@ class MainProcess:
         
     def activatesp(self, id, steps=-1):
         #log.info('activate {0} {1}'.format(id,steps))
+        # TODO send own process id to the parent to wait for it, before start continuing
         self.debuggee.send('activate {0} {1}'.format(id,steps))
         self.debuggee.close()
         #sys.exit(0)

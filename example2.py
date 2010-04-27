@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 
-import epdb
-#from epdb import println
-from epdb import side_effects
-from epdb import nothing
+import builtins
+from io import SEEK_SET
 
-epdb.println('a')
-epdb.println('b')
-epdb.println('c')
-epdb.println('e')
-epdb.println('f')
-epdb.println('g')
-epdb.println('h')
+f = builtins.open("testfile2", 'r+')
+
+print('File opened')
+print('File opened2')
+
+text = f.read()
+
+print(text)
+
+byteswritten = f.write('Hallo Welt\n')
+
+print('byteswritten', byteswritten)
+f.close()
+
+print('Finish')

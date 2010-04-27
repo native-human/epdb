@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 
 import random
-import __dbg
+import __dbg as dbg
 
 def randint(a, b):
     def replay(a, b):
-        print('replaying randint')
-        return __dbg.sde['0']()
+        print('replaying randint', dbg.ic, dbg.sde)
+        return dbg.sde[dbg.ic]
     def undo(a, b):
         print('undoing randint')
     def debug(a, b):
         value = random.__orig__randint(a, b)
-        #value = 3
-        def redo():
-            return value
-        __dbg.sde['0'] = redo
+        #def redo():
+        #    return value
+        #dbg.sde[dbg.ic] = redo
+        dbg.sde[dbg.ic] = value
         print('debugging randint')
         return value
-    if __dbg.mode == 'replay':
+    if dbg.mode == 'replay':
         return replay(a, b)
-    elif __dbg.mode == 'normal':
+    elif dbg.mode == 'normal':
         return debug(a, b)
     elif __dbg.mode == 'undo':
         return undo(a, b)

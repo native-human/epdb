@@ -11,6 +11,8 @@ import traceback
 import snapshotting
 import builtins
 import types
+import _thread
+
 sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 import __dbg as dbg
 
@@ -23,7 +25,9 @@ mode = 'normal'
 
 def __import__(*args):
     
-    #print('My import', args[0], args[3], args[4])
+    #print('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', '__dbg.py', 'shareddict.py']:
+        return __pythonimport__(*args)
     new = True
     if args[0] in dbg.modules:
         new = False
@@ -36,7 +40,7 @@ def __import__(*args):
     
     if new:
         dbg.modules.append(args[0])
-        print('new found', args[0], dbg.modules)
+        #print('new found', args[0], dbg.modules)
         if args[0] == 'random':
             print('Importing random')
             #print(mod.__dict__)
@@ -45,14 +49,35 @@ def __import__(*args):
             for key in randmod.__dict__.keys():
                 if key == 'random':
                     continue
-                if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', '__dbg']:
+                if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
                     continue
                 setattr(mod, '__orig__'+key, getattr(mod,key))
                 setattr(mod, key, getattr(randmod, key))
-            print(mod.__dict__.keys())
+                print('Patched: ', key)
+            #print(mod.__dict__.keys())
             #setattr(mod, 'randint', randint)
-        elif args[0] == 'builtins':
-            print('Print found')
+        elif args[0][:2] != '__':
+            try:
+                module = __pythonimport__('__'+args[0], globals(), locals(), [])
+            except ImportError:
+                pass
+            else:
+                print('Importing a module with patching', args[0])
+                for key in module.__dict__.keys():
+                    if key == args[0]:
+                        continue
+                    if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
+                        continue
+                    
+                    # if the name doesn't exist in the original file -> ignore it
+                    try:
+                        setattr(mod, '__orig__'+key, getattr(mod,key))
+                        setattr(mod, key, getattr(module, key))
+                    except AttributeError:
+                        pass
+                
+        #elif args[0] == 'builtins':
+        #    print('Print found')
             #setattr(mod, 'print', myprint)
     return mod
 
@@ -96,7 +121,7 @@ class Epdb(pdb.Pdb):
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
                                   "__builtins__": __builtins__,
-                                 })
+                                })
 
         # When bdb sets tracing, a number of call and line events happens
         # BEFORE debugger even reaches user's code (and the exact sequence of
@@ -111,6 +136,7 @@ class Epdb(pdb.Pdb):
         sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 
         with open(filename, "rb") as fp:
+            print(fp.read)
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
         #print('Test')
@@ -217,27 +243,21 @@ class Epdb(pdb.Pdb):
         #    return # None
         if os.path.basename(frame.f_code.co_filename).startswith('__'):
             return
-        if os.path.basename(frame.f_code.co_filename) in ['random.py']:
+        if os.path.basename(frame.f_code.co_filename) in ['random.py', 'builtins.py', 'locale.py', 'codecs.py', 'sys.py', 'encodings.py', 'functools.py', 're.py', 'sre_compile.py', 'sre_parse.py', 'epdb.py', 'posixpath.py', 'hmac.py', 'connection.py', 'managers.py', 'pickle.py', 'threading.py', 'util.py', 'process.py', 'socket.py', 'idna.py', 'os.py', 'shareddict.py']:
             return
+        else:
+            print('I am in file: ', frame.f_code.co_filename)
         #print(frame.f_code.co_filename)
         
         funcname = frame.f_code.co_name
         #print('Funcname', funcname)
         try:
             #isdebug = getattr(funcname, '__debug__')
-            if frame.f_code.co_filename == 'epdb.py':
-                isdebug = True
-                return
             namespace = {}
             namespace.update(frame.f_globals)
             namespace.update(frame.f_locals)
             namespace.update(frame.f_builtins)
             funcobj = namespace[funcname]
-            isdebug = funcobj.__debug__
-            #print('getattr successful', isdebug)
-            if isdebug:
-                #print('debug method ', funcname)
-                return
         except AttributeError:
             pass
             #print('AttrError', str(sorted(namespace.keys())))
@@ -301,6 +321,12 @@ class Epdb(pdb.Pdb):
         #print('raise EpdbExit()')
         raise EpdbExit()
     
+    def do_ude(self, arg):
+        print('ude:', dbg.ude)
+    
+    def do_sde(self, arg):
+        print('sde:', dbg.sde)
+    
     def do_epdbexit(self, arg):
         raise EpdbExit()
     
@@ -324,13 +350,21 @@ class Epdb(pdb.Pdb):
         return 1
     
     def do_stepback(self, arg):
-        #global mode
-        # actual_ic = self.ic
+        # TODO make a snapshot at the beginning of the program. This is necessary
+        # for not doubeling up a filedescriptor, if the program replays after opening
+        # a file. The open file descriptor would be closed.
         actual_ic = dbg.ic
         snapshot_ic = self.ss_ic
         steps = actual_ic - snapshot_ic - 1
         
         snapshot = self.snapshot
+        
+        # Undo last step
+        try:
+            dbg.ude[dbg.ic - 1]()
+            del dbg.ude[dbg.ic - 1]
+        except KeyError:
+            pass
         
         if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
