@@ -12,6 +12,7 @@ import snapshotting
 import builtins
 import types
 import _thread
+from debug import debug
 
 sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 import __dbg as dbg
@@ -25,7 +26,7 @@ mode = 'normal'
 
 def __import__(*args):
     
-    #print('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
+    #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', '__dbg.py', 'shareddict.py']:
         return __pythonimport__(*args)
     new = True
@@ -34,17 +35,17 @@ def __import__(*args):
     mod = __pythonimport__(*args)
     #try:
     #    getattr(mod, 'print')
-    #    print('Found')
+    #    debug('Found')
     #except:
     #    pass
     
     if new:
         dbg.modules.append(args[0])
-        #print('new found', args[0], dbg.modules)
+        #debug('new found', args[0], dbg.modules)
         if args[0] == 'random':
-            print('Importing random')
-            #print(mod.__dict__)
-            #print(getattr(mod, 'randint'))
+            debug('Importing random')
+            #debug(mod.__dict__)
+            #debug(getattr(mod, 'randint'))
             randmod = __pythonimport__('__random', globals(), locals(), [])
             for key in randmod.__dict__.keys():
                 if key == 'random':
@@ -53,7 +54,7 @@ def __import__(*args):
                     continue
                 setattr(mod, '__orig__'+key, getattr(mod,key))
                 setattr(mod, key, getattr(randmod, key))
-                print('Patched: ', key)
+                debug('Patched: ', key)
             #print(mod.__dict__.keys())
             #setattr(mod, 'randint', randint)
         elif args[0][:2] != '__':
@@ -62,7 +63,7 @@ def __import__(*args):
             except ImportError:
                 pass
             else:
-                print('Importing a module with patching', args[0])
+                debug('Importing a module with patching', args[0])
                 for key in module.__dict__.keys():
                     if key == args[0]:
                         continue
@@ -77,7 +78,7 @@ def __import__(*args):
                         pass
                 
         #elif args[0] == 'builtins':
-        #    print('Print found')
+        #    debug('Print found')
             #setattr(mod, 'print', myprint)
     return mod
 
@@ -99,7 +100,7 @@ def nothing(*args, **kargs):
 
 #@side_effects(undo=nothing, replay=nothing)
 #def println(*args, **kargs):
-#    print(*args, **kargs)
+#    debug(*args, **kargs)
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -136,12 +137,12 @@ class Epdb(pdb.Pdb):
         sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 
         with open(filename, "rb") as fp:
-            print(fp.read)
+            debug(fp.read)
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
-        #print('Test')
-        #print(statement)
-        #print(self.mainpyfile)
+        #debug('Test')
+        #debug(statement)
+        #debug(self.mainpyfile)
         
         #self.reset()
         self.quitting = 0
@@ -183,27 +184,27 @@ class Epdb(pdb.Pdb):
         self.stopafter = -1
     
     def user_line(self, frame):
-        #print('user_line')
+        #debug('user_line')
         if self.stopafter > 0:
-            #print('return')
+            #debug('return')
             return
         pdb.Pdb.user_line(self, frame)
         
     #def _runscript(self, filename):
-    #    #print('_runscript', self.stopafter)
+    #    #debug('_runscript', self.stopafter)
     #    self.ic = 0
     #    pdb.Pdb._runscript(self, filename)
     #    #if self.stopafter > 0:
-    #    #    print('continue set')
+    #    #    debug('continue set')
     #    #    self.set_continue()
     
     def trace_dispatch(self, frame, event, arg):
-        # print("trace_dispatch")
+        # debug("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
     
     def dispatch_line(self, frame):
         #global mode
-        #print('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, self.ic)
+        #debug('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, self.ic)
         
         #self.ic += 1
         dbg.ic += 1
@@ -212,29 +213,29 @@ class Epdb(pdb.Pdb):
             if frame.f_code.co_filename == self.mainpyfile:
                 #self.starting_ic = self.ic
                 self.starting_ic = dbg.ic
-            #print(frame.f_code.co_filename, self.mainpyfile)
-        # print('Line is going to be dispatched: ', self.ic)
+            #debug(frame.f_code.co_filename, self.mainpyfile)
+        # debug('Line is going to be dispatched: ', self.ic)
         
         if self.stopafter > 0:
             self.stopafter -= 1
         
         if self.stopafter == 0:
             self.stopafter = -1
-            print(dbg.mode)
+            debug(dbg.mode)
             dbg.mode = 'normal'
-            # print('stopafter triggered')
+            # debug('stopafter triggered')
             self.set_trace()
             
         return pdb.Pdb.dispatch_line(self, frame)
     
     def dispatch_call(self, frame, arg):
-        # print('dispatch a call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno)
+        # debug('dispatch a call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno)
         
         #if frame.f_code.co_name == 'blah':
-        #    print("inject code: ", self.curframe.f_lineno)
+        #    debug("inject code: ", self.curframe.f_lineno)
 
         if self.botframe is None:
-            #print('self.botframe == None')
+            #debug('self.botframe == None')
             # First call of dispatch since reset()
             self.botframe = frame.f_back # (CT) Note that this may also be None!
             return self.trace_dispatch
@@ -246,11 +247,11 @@ class Epdb(pdb.Pdb):
         if os.path.basename(frame.f_code.co_filename) in ['random.py', 'builtins.py', 'locale.py', 'codecs.py', 'sys.py', 'encodings.py', 'functools.py', 're.py', 'sre_compile.py', 'sre_parse.py', 'epdb.py', 'posixpath.py', 'hmac.py', 'connection.py', 'managers.py', 'pickle.py', 'threading.py', 'util.py', 'process.py', 'socket.py', 'idna.py', 'os.py', 'shareddict.py']:
             return
         else:
-            print('I am in file: ', frame.f_code.co_filename)
-        #print(frame.f_code.co_filename)
+            debug('I am in file: ', frame.f_code.co_filename)
+        #debug(frame.f_code.co_filename)
         
         funcname = frame.f_code.co_name
-        #print('Funcname', funcname)
+        #debug('Funcname', funcname)
         try:
             #isdebug = getattr(funcname, '__debug__')
             namespace = {}
@@ -260,10 +261,10 @@ class Epdb(pdb.Pdb):
             funcobj = namespace[funcname]
         except AttributeError:
             pass
-            #print('AttrError', str(sorted(namespace.keys())))
+            #debug('AttrError', str(sorted(namespace.keys())))
         except KeyError:
             pass
-            #print('KeyError', str(sorted(namespace.keys())))
+            #debug('KeyError', str(sorted(namespace.keys())))
         self.user_call(frame, arg)
         if self.quitting: raise BdbQuit
         return self.trace_dispatch
@@ -271,16 +272,16 @@ class Epdb(pdb.Pdb):
         # return pdb.Pdb.dispatch_call(self, frame, arg)
     
     def stop_here(self, frame):
-        #print('Stop here')
+        #debug('Stop here')
         if pdb.Pdb.stop_here(self, frame):
-            #print('stop found')
+            #debug('stop found')
             return True
         return False
     
     def break_here(self, frame):
-        #print('Break here')
+        #debug('Break here')
         if pdb.Pdb.break_here(self, frame):
-            #print('Breakpoint found')
+            #debug('Breakpoint found')
             return True
         return False
 
@@ -299,10 +300,10 @@ class Epdb(pdb.Pdb):
         self.snapshot_id = snapshot.id
         # self.ss_ic = self.ic
         self.ss_ic = dbg.ic
-        # print("step_forward: {0}".format(snapshot.step_forward))
+        # debug("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
-            #print ('mode replay')
+            #debug ('mode replay')
             self.stopafter = snapshot.step_forward
             self.set_continue()
             return 1
@@ -313,19 +314,19 @@ class Epdb(pdb.Pdb):
         try:
             id = int(arg)
         except:
-             print('You need to supply an index, e.g. restore 0')
+             debug('You need to supply an index, e.g. restore 0')
              return
-        # print('restore {0}'.format(arg))
+        # debug('restore {0}'.format(arg))
         self.mp.activatesp(id)
         # self.set_quit()
-        #print('raise EpdbExit()')
+        #debug('raise EpdbExit()')
         raise EpdbExit()
     
     def do_ude(self, arg):
-        print('ude:', dbg.ude)
+        debug('ude:', dbg.ude)
     
     def do_sde(self, arg):
-        print('sde:', dbg.sde)
+        debug('sde:', dbg.sde)
     
     def do_epdbexit(self, arg):
         raise EpdbExit()
@@ -341,8 +342,7 @@ class Epdb(pdb.Pdb):
         self.init_reversible()
     
     def do_ic(self, arg):
-        #print('The instruction count is:', self.ic)
-        print('The instruction count is:', dbg.ic)
+        debug('The instruction count is:', dbg.ic)
         
     def do_quit(self, arg):
         self._user_requested_quit = 1
@@ -369,9 +369,9 @@ class Epdb(pdb.Pdb):
         if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
-            print('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
             if self.psnapshot == None:
-                #print('Backstepping over a snapshot to the beginning of the program not implemented yet.')
+                #debugging('Backstepping over a snapshot to the beginning of the program not implemented yet.')
                 self.snapshot = None
                 self.psnapshot = None
                 dbg.mode = 'replay'
@@ -385,7 +385,7 @@ class Epdb(pdb.Pdb):
         
         if snapshot == None:
             if actual_ic == self.starting_ic:
-                print("Can't step back. At the beginning of the program")
+                debug("Can't step back. At the beginning of the program")
             dbg.mode = 'replay'
             self.stopafter = steps
             pdb.Pdb.do_run(self, None) # do_run raises a restart exception
@@ -396,7 +396,7 @@ class Epdb(pdb.Pdb):
         
         
     def set_quit(self):
-        # print('quit set')
+        # debug('quit set')
         self.mp.quit()
         pdb.Pdb.set_quit(self)
 

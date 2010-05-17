@@ -9,6 +9,7 @@ import pickle
 import sys
 import collections
 import select
+from debug import debug
     
 def connect(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -92,7 +93,7 @@ def server(dofork=False):
                     elif event == select.EPOLLPRI:
                         pass
                     else:
-                        print('Server: Unknown event')
+                        debug('Server: Unknown event')
                 except socket.error:
                     poll.unregister(fileno)
     if dofork:
@@ -114,11 +115,11 @@ def client():
             con.send(pickle.dumps(('__getitem__', (idx), {})))
             t,r = pickle.loads(con.recv())
         if t == 'RET':
-            print(r)
+            debug(r)
         elif t == 'EXC':
             raise r
         else:
-            print('Unknown return value')
+            debug('Unknown return value')
         txt = input()
     con.close()
     
@@ -138,7 +139,7 @@ class DictProxy:
         elif t == 'EXC':
             raise r
         else:
-            print('Unknown return value')
+            debug('Unknown return value')
             
     def __getitem__(self, idx):
         return self._remote_invoke('__getitem__', (idx,), {})
@@ -191,6 +192,6 @@ if __name__ == '__main__':
         sd[1] = {'a':'b'}
     else:
         time.sleep(0.1)
-        print(sd[1]['a'])
+        debug(sd[1]['a'])
         shutdown()
  

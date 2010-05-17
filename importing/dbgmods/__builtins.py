@@ -7,14 +7,19 @@ from io import SEEK_SET, SEEK_END, SEEK_CUR
 import os
 import sys
 import _thread
+import debug as log
+
+def orig_open(*args, **kargs):
+    return builtins.__orig__open(*args, **kargs)
 
 class FileProxy:
-    def __init__(self, file):
+    def __init__(self, file, args):
         self.__file__ = file
         self.__action_hist__ = []
+        self._args = args
     def write(self, b):
         def replay(self, b):
-            return self.__orig__write(b)
+            return debug(self, b)
         def debug(self, b):
             
             origposition = self.__file__.tell()
@@ -30,14 +35,14 @@ class FileProxy:
             value = self.__file__.write(b)
             self.__action_hist__.append(('write',b, overwritten))
             def undoer():
-                print('Undo writing file')
+                log.debug('Undo writing file')
                 self.__file__.seek(origposition, SEEK_SET)
                 self.__file__.write(overwritten)
                 self.__file__.truncate(filesize)
             dbg.sde[dbg.ic] = {'afterposition':afterposition, 'value': value}
             dbg.ude[dbg.ic] = undoer
             return value
-        print('Writing to the file descriptor')
+        log.debug('Writing to the file descriptor')
         if dbg.mode == 'normal':
             return debug(self, b)
         elif dbg.mode == 'replay':
@@ -49,12 +54,12 @@ class FileProxy:
             value = self.__file__.read(n)
             afterposition = self.__file__.tell()
             def undoer():
-                print('Undoing read')
+                log.debug('Undoing read')
                 self.__file__.seek(origposition, SEEK_SET)
             self.__action_hist__.append(('read',value, None))
             dbg.sde[dbg.ic] = {'afterposition': afterposition, 'value': value}
             dbg.ude[dbg.ic] = undoer
-            print('Saving redoing function on', dbg.ic)
+            log.debug('Saving redoing function on', dbg.ic)
             return value
         def replay(self, n):
             d = dbg.sde[dbg.ic]
@@ -62,9 +67,9 @@ class FileProxy:
             value = d['value']
             self.__file__.seek(afterposition, SEEK_SET)
             return value
-            #print('Position: ', dbg.ic)
+            #log.debug('Position: ', dbg.ic)
             #return dbg.sde[dbg.ic]()
-        print('reading from the file descriptor')
+        log.debug('reading from the file descriptor')
         #sys._current_frames()[thread.get_ident()].f_code.co_filename
         if dbg.mode == 'normal':
             return debug(self, n)
@@ -73,39 +78,41 @@ class FileProxy:
     
     def close(self):
         def debug(self):
-            print('Doing close')
+            log.debug('Doing close')
             self.__file__.close()
             self.__action_hist__.append(('close',None, None))
             dbg.ude[dbg.ic] = undo
         def replay(self):
-            print('Replaying close')
+            log.debug('Replaying close')
             self.__file__.close()
         def undo():
             idx = len(self.__action_hist__)
-            print(idx)
+            log.debug(idx)
             while idx > 0:
                 idx -= 1
                 cmd,new,old = self.__action_hist__[idx]
                 if cmd == 'flush' or cmd == 'open':
                     break
             
-            assert cmd == 'flush' or cmd == 'open'    
+            assert cmd == 'flush' or cmd == 'open'
+            self.__file__ = orig_open(*self._args)
             
             while idx < len(self.__action_hist__)-1:
                 cmd,new,old = self.__action_hist__[idx]
                 if cmd == 'flush' or cmd == 'open':
                     self.__file__.seek(0, SEEK_SET)
                     self.__file__.write(new)
-                    print('Closing: resetted to last flush')
+                    log.debug('Closing: resetted to last flush:', new)
                 if cmd == 'write':
                     self.__file__.write(new)
-                    print('Closing: rewritten')
+                    log.debug('Closing: rewritten')
                 if cmd == 'read':
-                    self.__file__.seek(len(new), SEEK_CUR)
-                    print('Closing: rereading')
+                    pos = self.__file__.tell()
+                    self.__file__.seek(pos + len(new), SEEK_SET)
+                    log.debug('Closing: rereading')
                 idx += 1
             
-            print('Undoing close')
+            log.debug('Undoing close')
         if dbg.mode == 'normal':
             return debug(self)
         elif dbg.mode == 'replay':
@@ -118,28 +125,29 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
     def undo(file, mode = "r", buffering = -1, encoding = None, errors = None, newline = None, closefd = True):
         pass
     def debug(file, mode = "r", buffering = -1, encoding = None, errors = None, newline = None, closefd = True):
-        print('Debug open')
+        log.debug('Debug open')
         writeonly = readonly = False
         if 'r' in mode and not '+' in mode:
             readonly = True
         
         if ('w' in mode or 'a' in mode) and not '+' in mode:
             writeonly = True
-            print('Warning: writeonly opening of a file cannot be debugged in reverse')
+            log.debug('Warning: writeonly opening of a file cannot be debugged in reverse')
         
         fd = builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
-        fp = FileProxy(fd)
+        args = (file, mode, buffering, encoding, errors, newline, closefd)
+        fp = FileProxy(fd, args)
         startbuffer = fd.read()
         fd.seek(0, SEEK_SET)
         fp.__action_hist__.append(('open',startbuffer, None)) 
         def undoer():
-            print('Undo opening file')
+            log.debug('Undo opening file')
             fd.close()
         dbg.ude[dbg.ic] = undoer
         
         return fp
     
-    print('Caller:', os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
+    log.debug('Caller:', os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'linecache.py']:
         return builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
     if dbg.mode == 'replay':
