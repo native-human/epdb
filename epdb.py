@@ -42,22 +42,22 @@ def __import__(*args):
     if new:
         dbg.modules.append(args[0])
         #debug('new found', args[0], dbg.modules)
-        if args[0] == 'random':
-            debug('Importing random')
-            #debug(mod.__dict__)
-            #debug(getattr(mod, 'randint'))
-            randmod = __pythonimport__('__random', globals(), locals(), [])
-            for key in randmod.__dict__.keys():
-                if key == 'random':
-                    continue
-                if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-                    continue
-                setattr(mod, '__orig__'+key, getattr(mod,key))
-                setattr(mod, key, getattr(randmod, key))
-                debug('Patched: ', key)
-            #print(mod.__dict__.keys())
-            #setattr(mod, 'randint', randint)
-        elif args[0][:2] != '__':
+        #if args[0] == 'random':
+        #    debug('Importing random')
+        #    #debug(mod.__dict__)
+        #    #debug(getattr(mod, 'randint'))
+        #    randmod = __pythonimport__('__random', globals(), locals(), [])
+        #    for key in randmod.__dict__.keys():
+        #        if key == 'random':
+        #            continue
+        #        if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
+        #            continue
+        #        setattr(mod, '__orig__'+key, getattr(mod,key))
+        #        setattr(mod, key, getattr(randmod, key))
+        #        debug('Patched: ', key)
+        #    #print(mod.__dict__.keys())
+        #    #setattr(mod, 'randint', randint)
+        if args[0][:2] != '__':
             try:
                 module = __pythonimport__('__'+args[0], globals(), locals(), [])
             except ImportError:

@@ -6,17 +6,19 @@ import sys
 import select
 import logging
 import tempfile
+import debug as log
 
 sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 import __dbg as dbg
 import shareddict
 
-log = logging.getLogger('socket.test')
-log.addHandler(logging.StreamHandler(sys.stderr))
-log.setLevel(logging.DEBUG)
+#log = logging.getLogger('socket.test')
+#log.addHandler(logging.StreamHandler(sys.stderr))
+#log.setLevel(logging.DEBUG)
 
 tmpfd, tmppath = tempfile.mkstemp(".dbg")
-log.info("tmppath: " + tmppath)
+
+log.debug("tmppath", tmppath)
 
 SOCK_DIR = tempfile.mkdtemp()
 
@@ -34,8 +36,8 @@ class ControllerExit(Exception):
 
 class Snapshot:
     def __init__(self, ic, psnapshot):
-        #log.info('Savepoint fork')
-        #log.info('parentpid: %d %d' % (pid, os.getpid()))
+        #log.debug('Savepoint fork')
+        #log.debug('parentpid: %d %d' % (pid, os.getpid()))
         self.ic = ic
         self.psnapshot = psnapshot
         # This is done before forking because of synchronization
@@ -48,7 +50,7 @@ class Snapshot:
         args = msg.split(' ')
         cmd = args[0]
         self.id = int(args[1])
-        log.info("Made a snapshot with id {0}".format(self.id))
+        log.debug("Made a snapshot with id {0}".format(self.id))
         if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
@@ -63,12 +65,12 @@ class Snapshot:
                 args = msg.split()
                 cmd = args[0]
                 if cmd == "close":
-                    #log.info('Savepoint quit ... Wait for subprocess')
+                    #log.debug('Savepoint quit ... Wait for subprocess')
                     while self.cpids != []:
                         (pid,status) = os.wait()
                         idx = self.cpids.index(pid)
                         del self.cpids[idx]
-                    #log.info('Savepoint quit')
+                    #log.debug('Savepoint quit')
                     raise SnapshotExit()
                     # sys.exit(0)
                 if cmd == "run":
@@ -77,7 +79,7 @@ class Snapshot:
                     if rpid:
                         self.cpids.append(rpid)
                     else:    
-                        #log.info("Child process runs")
+                        #log.debug.info("Child process runs")
                         self.step_forward = steps
                         #print('Trying to connect to the server')
                         #dbg.connect()
@@ -87,7 +89,7 @@ class Snapshot:
         else:
             #dbg.connect()
             dbg.sde = shareddict.DictProxy()
-            #log.info('childpid %d'% pid)
+            #log.debug('childpid %d'% pid)
             self.step_forward = -1
         
 class Messaging:
@@ -141,7 +143,7 @@ class SavepointConnection:
     
     def respond(self):
         cmd = self.msging.recv()
-        logging.info('cmd')
+        log.debug('cmd')
     
     def activate(self, steps=-1):
         #log.info('Activate Savepoint with {0}'.format(steps))
