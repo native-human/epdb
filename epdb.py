@@ -180,7 +180,7 @@ class Epdb(pdb.Pdb):
         self.psnapshot = None
         self.psnapshot_id = None
         
-        self.prompt = '(Edpb) '
+        self.prompt = '(Epdb) '
         self.stopafter = -1
     
     def user_line(self, frame):
