@@ -27,7 +27,7 @@ mode = 'normal'
 def __import__(*args):
     
     #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', '__dbg.py', 'shareddict.py']:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', '__dbg.py', 'shareddict.py', 'debug.py']:
         return __pythonimport__(*args)
     new = True
     if args[0] in dbg.modules:
