@@ -5,6 +5,7 @@ import cmd
 import bdb
 from reprlib import Repr
 import os
+import os.path
 import re
 import pprint
 import traceback
@@ -12,10 +13,13 @@ import snapshotting
 import builtins
 import types
 import _thread
+import configparser
 from debug import debug
 
+dbgmods = ''
+
 sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
-import __dbg as dbg
+import dbg
 
 __pythonimport__ = builtins.__import__
 
@@ -512,8 +516,21 @@ def main():
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
 
+def readconfig():
+    global dbgmods
+    try:
+        config = configparser.ConfigParser()
+        config.read(os.path.expanduser("~/.config/epdb.conf"))
+        dbgmods = config.get('Main', 'dbgmods')
+    except:
+        dbgmods = '/home/patrick/myprogs/epdb/importing/dbgmods'
+
+
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
+    #readconfig()
+    #print(dbgmods)
+    #sys.exit(0)
     import epdb
     epdb.main()
     #print('Loop finished')
