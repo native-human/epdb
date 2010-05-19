@@ -16,9 +16,7 @@ import _thread
 import configparser
 from debug import debug
 
-dbgmods = ''
-
-sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+#sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
 import dbg
 
 __pythonimport__ = builtins.__import__
@@ -517,20 +515,19 @@ def main():
             #      " will be restarted")
 
 def readconfig():
-    global dbgmods
+    sys.path = origpath
     try:
         config = configparser.ConfigParser()
         config.read(os.path.expanduser("~/.config/epdb.conf"))
         dbgmods = config.get('Main', 'dbgmods')
     except:
         dbgmods = '/home/patrick/myprogs/epdb/importing/dbgmods'
-
+    sys.path.append(dbgmods)
 
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
-    #readconfig()
-    #print(dbgmods)
-    #sys.exit(0)
+    origpath = sys.path[:]
+    readconfig()
     import epdb
     epdb.main()
     #print('Loop finished')

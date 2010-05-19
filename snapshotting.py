@@ -8,8 +8,7 @@ import logging
 import tempfile
 import debug as log
 
-sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
-import __dbg as dbg
+import dbg
 import shareddict
 
 #log = logging.getLogger('socket.test')
