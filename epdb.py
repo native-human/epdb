@@ -16,7 +16,29 @@ import _thread
 import configparser
 from debug import debug
 
-#sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+#dbgpath = '/home/patrick/myprogs/epdb/dbgmods'
+#sys.path.append(dbgpath)
+#sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
+
+dbgpath = None
+
+def readconfig():
+    global dbgpath
+    sys.path = origpath
+    try:
+        config = configparser.ConfigParser()
+        config.read(os.path.expanduser("~/.config/epdb.conf"))
+        dbgmods = config.get('Main', 'dbgmods')
+    except:
+        dbgmods = '/home/patrick/myprogs/epdb/dbgmods'
+    dbgpath = dbgmods
+    sys.path.append(dbgmods)
+
+origpath = sys.path[:]
+readconfig()
+
+#debug("PATH: ", sys.path)
+
 import dbg
 
 __pythonimport__ = builtins.__import__
@@ -27,10 +49,13 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 mode = 'normal'
 
 def __import__(*args):
-    
+    #debug("myimport", args[0], sys.path)
     #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', '__dbg.py', 'shareddict.py', 'debug.py']:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py"]:
         return __pythonimport__(*args)
+    else:
+        debug("Importing", os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
+        debug("ic: ", dbg.ic)
     new = True
     if args[0] in dbg.modules:
         new = False
@@ -62,10 +87,12 @@ def __import__(*args):
         if args[0][:2] != '__':
             try:
                 module = __pythonimport__('__'+args[0], globals(), locals(), [])
+                #debug("success")
             except ImportError:
                 pass
+                #debug("nosuccess", sys.path)
             else:
-                debug('Importing a module with patching', args[0])
+                #debug('Importing a module with patching', args[0])
                 for key in module.__dict__.keys():
                     if key == args[0]:
                         continue
@@ -136,7 +163,8 @@ class Epdb(pdb.Pdb):
         self._user_requested_quit = 0
         globals = __main__.__dict__
         locals = globals
-        sys.path.append('/home/patrick/myprogs/epdb/importing/dbgmods')
+        debug("##################",dbgpath)
+        sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
 
         with open(filename, "rb") as fp:
             debug(fp.read)
@@ -246,7 +274,7 @@ class Epdb(pdb.Pdb):
         #    return # None
         if os.path.basename(frame.f_code.co_filename).startswith('__'):
             return
-        if os.path.basename(frame.f_code.co_filename) in ['random.py', 'builtins.py', 'locale.py', 'codecs.py', 'sys.py', 'encodings.py', 'functools.py', 're.py', 'sre_compile.py', 'sre_parse.py', 'epdb.py', 'posixpath.py', 'hmac.py', 'connection.py', 'managers.py', 'pickle.py', 'threading.py', 'util.py', 'process.py', 'socket.py', 'idna.py', 'os.py', 'shareddict.py']:
+        if os.path.basename(frame.f_code.co_filename) in ['random.py', 'builtins.py', 'locale.py', 'codecs.py', 'sys.py', 'encodings.py', 'functools.py', 're.py', 'sre_compile.py', 'sre_parse.py', 'epdb.py', 'posixpath.py', 'hmac.py', 'connection.py', 'managers.py', 'pickle.py', 'threading.py', 'util.py', 'process.py', 'socket.py', 'idna.py', 'os.py', 'shareddict.py', 'debug.py']:
             return
         else:
             debug('I am in file: ', frame.f_code.co_filename)
@@ -514,20 +542,10 @@ def main():
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
 
-def readconfig():
-    sys.path = origpath
-    try:
-        config = configparser.ConfigParser()
-        config.read(os.path.expanduser("~/.config/epdb.conf"))
-        dbgmods = config.get('Main', 'dbgmods')
-    except:
-        dbgmods = '/home/patrick/myprogs/epdb/importing/dbgmods'
-    sys.path.append(dbgmods)
-
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
-    origpath = sys.path[:]
-    readconfig()
     import epdb
     epdb.main()
+else:
+    debug("ELSEELSE")
     #print('Loop finished')
