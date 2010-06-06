@@ -140,6 +140,25 @@ class Epdb(pdb.Pdb):
         pdb.Pdb.__init__(self)
         self.init_reversible()
     
+    def make_snapshot(self):
+        snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
+        self.psnapshot = self.snapshot
+        self.psnapshot_id = self.snapshot_id
+        self.pss_ic = self.ss_ic
+        self.snapshot = snapshot
+        self.snapshot_id = snapshot.id
+        # self.ss_ic = self.ic
+        self.ss_ic = dbg.ic
+        # debug("step_forward: {0}".format(snapshot.step_forward))
+        if snapshot.step_forward > 0:
+            dbg.mode = 'replay'
+            #debug ('mode replay')
+            self.stopafter = snapshot.step_forward
+            self.set_continue()
+            return 1
+        else:
+            return
+    
     def _runscript(self, filename):
         # The script has to run in __main__ namespace (or imports from
         # __main__ will break).
@@ -179,8 +198,9 @@ class Epdb(pdb.Pdb):
         self.botframe = None
         self.stopframe = None
         self.returnframe = None
-        
+        self.make_snapshot()
         sys.settrace(self.trace_dispatch)
+        #self.make_snapshot()
         builtins.__import__ = __import__
         if not isinstance(cmd, types.CodeType):
             statement = statement + '\n'
@@ -191,7 +211,6 @@ class Epdb(pdb.Pdb):
         finally:
             self.quitting = 1
             sys.settrace(None)
-        
         #self.run(statement)
         
     def init_reversible(self):
@@ -322,23 +341,7 @@ class Epdb(pdb.Pdb):
     def do_snapshot(self, arg, temporary=0):
         #global mode
         #snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
-        snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
-        self.psnapshot = self.snapshot
-        self.psnapshot_id = self.snapshot_id
-        self.pss_ic = self.ss_ic
-        self.snapshot = snapshot
-        self.snapshot_id = snapshot.id
-        # self.ss_ic = self.ic
-        self.ss_ic = dbg.ic
-        # debug("step_forward: {0}".format(snapshot.step_forward))
-        if snapshot.step_forward > 0:
-            dbg.mode = 'replay'
-            #debug ('mode replay')
-            self.stopafter = snapshot.step_forward
-            self.set_continue()
-            return 1
-        else:
-            return
+        self.make_snapshot()
     
     def do_restore(self, arg):
         try:
