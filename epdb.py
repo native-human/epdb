@@ -257,6 +257,8 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
             dbg.ic += 1
+            if self.nocalls == 0:
+                self.interaction(frame, None)
         else:
             if self._wait_for_mainpyfile:
                 debug('_wait_for_mainpyfile')
@@ -300,6 +302,8 @@ class Epdb(pdb.Pdb):
         #raise EpdbExit()
         if self.running_mode == 'continue':
             pass
+        elif self.running_mode == 'next':
+            self.nocalls += 1
         else:
             if self._wait_for_mainpyfile:
                 debug("User call waiting for mainpyfile")
@@ -423,6 +427,8 @@ class Epdb(pdb.Pdb):
     def set_next(self, frame):
         """Stop on the next line in or below the given frame."""
         self._set_stopinfo(None, None)
+        self.running_mode = 'next'
+        self.nocalls = 0 # Increased on call - decreased on return
         
     def set_quit(self):
         # debug('quit set')
@@ -431,10 +437,12 @@ class Epdb(pdb.Pdb):
     
     def user_return(self, frame, return_value):
         """This function is called when a return trap is set here."""
-        frame.f_locals['__return__'] = return_value
         if  self.running_mode == 'continue':
             pass
+        elif  self.running_mode == 'next':
+            self.nocalls -= 1
         else:
+            frame.f_locals['__return__'] = return_value
             debug('--Return--')
             self.interaction(frame, None)
 
