@@ -202,7 +202,10 @@ class MainProcess:
                             #log.info('end received')
                             for conn in self.savepoint_connections:
                                 #log.info("quit sent")
-                                conn.quit()
+                                try:
+                                    conn.quit()
+                                except:
+                                    log.debug("Warning: Shuting down of Savepoint failed")
                             self.do_quit = True
                             #os.unlink(SOCK_NAME)
                             #sys.exit(0)
@@ -211,11 +214,11 @@ class MainProcess:
                             arg = words[1]
                             controller.send("Connected " + arg)
                         elif cmd == 'showlist':
-                            log.info('ID           InstructionNr    PSnapshot')
-                            log.info('----------------------------')
+                            log.debug('ID           InstructionNr    PSnapshot')
+                            log.debug('----------------------------')
                             for s in self.savepoint_connections:
-                                log.info("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
-                            log.info('Number of snapshots: %d' %
+                                log.debug("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
+                            log.debug('Number of snapshots: %d' %
                                      len(self.savepoint_connections))
                             controller.send('ok')
                         elif cmd == 'activate':
@@ -230,7 +233,7 @@ class MainProcess:
                             sp = self.savepoint_connections[spid]
                             sp.activate(steps)
                         else:
-                            log.info(cmd)
+                            log.debug(cmd)
                             
                     # New Savepoint/Debuggee Connection
                     elif fd == sp_sock.fileno():
@@ -272,13 +275,18 @@ class MainProcess:
     
     def list_savepoints(self):
         """Tell the controller to list all snapshots."""
+        log.debug("Send List Savepoints")
         self.debuggee.send('showlist')
         reply = self.debuggee.recv()
+        log.debug('reply received')
         if reply != 'ok':
             raise Exception()
     
     def quit(self):
-        self.debuggee.send('end')
+        try:
+            self.debuggee.send('end')
+        except:
+            log.debug("Warning shutting down of snapshot server failed")
         
     def activatesp(self, id, steps=-1):
         #log.info('activate {0} {1}'.format(id,steps))

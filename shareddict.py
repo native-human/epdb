@@ -181,6 +181,7 @@ class DictProxy:
         return self._remote_invoke('clear',(), {})
 
 def shutdown():
+    debug("Shutting down")
     conn = connect('/tmp/shareddict')
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
     
