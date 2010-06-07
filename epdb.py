@@ -259,6 +259,8 @@ class Epdb(pdb.Pdb):
             dbg.ic += 1
             if self.nocalls == 0:
                 self.interaction(frame, None)
+            if self.break_here(frame):
+                self.interaction(frame, None)
         else:
             if self._wait_for_mainpyfile:
                 debug('_wait_for_mainpyfile')
@@ -300,7 +302,9 @@ class Epdb(pdb.Pdb):
     def user_call(self, frame, argument_list):
         debug('User call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno, dbg.ic)
         #raise EpdbExit()
-        if self.running_mode == 'continue':
+        if dbg.mode == 'replay':
+            pass
+        elif self.running_mode == 'continue':
             pass
         elif self.running_mode == 'next':
             self.nocalls += 1
@@ -377,7 +381,7 @@ class Epdb(pdb.Pdb):
         self.set_quit()
         return 1
     
-    def do_stepback(self, arg):
+    def do_rstep(self, arg):
         # TODO make a snapshot at the beginning of the program. This is necessary
         # for not doubeling up a filedescriptor, if the program replays after opening
         # a file. The open file descriptor would be closed.
