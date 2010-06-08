@@ -241,6 +241,15 @@ class Epdb(pdb.Pdb):
         self.prompt = '(Epdb) '
         self.running_mode = None
         self.stopafter = -1
+        
+        # The call_stack contains ic for every call in a previous frame
+        # This is used in user_return to find its corresponding call
+        self.call_stack = []
+        
+        # In rnext_ic the position for the rnext command to jump to is saved
+        # It is filled in user_return
+        self.rnext_ic = {}
+        
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -301,6 +310,9 @@ class Epdb(pdb.Pdb):
         
     def user_call(self, frame, argument_list):
         debug('User call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno, dbg.ic)
+        
+        self.call_stack.append(dbg.ic)
+        
         #raise EpdbExit()
         if dbg.mode == 'replay':
             pass
@@ -383,9 +395,6 @@ class Epdb(pdb.Pdb):
         return 1
     
     def do_rstep(self, arg):
-        # TODO make a snapshot at the beginning of the program. This is necessary
-        # for not doubeling up a filedescriptor, if the program replays after opening
-        # a file. The open file descriptor would be closed.
         actual_ic = dbg.ic
         snapshot_ic = self.ss_ic
         steps = actual_ic - snapshot_ic - 1
@@ -398,6 +407,14 @@ class Epdb(pdb.Pdb):
             del dbg.ude[dbg.ic - 1]
         except KeyError:
             pass
+        
+        if dbg.ic == 0:
+            debug("At the beginning of the program. Can't step back")
+            return
+        
+        if snapshot == None:
+            debug("No snapshot made. Can't step back")
+            return
         
         if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
@@ -414,18 +431,37 @@ class Epdb(pdb.Pdb):
             steps = actual_ic - self.pss_ic - 1
             self.mp.activatesp(self.psnapshot.id, steps)
             raise EpdbExit()
-            
-        
-        if snapshot == None:
-            debug("Program restart stepback")
-            if actual_ic == self.starting_ic:
-                debug("Can't step back. At the beginning of the program")
-            dbg.mode = 'replay'
-            self.stopafter = steps
-            pdb.Pdb.do_run(self, None) # do_run raises a restart exception
-            #return
         
         debug('snapshot activation')
+        self.mp.activatesp(snapshot.id, steps)
+        raise EpdbExit()
+        
+    def do_rnext(self, arg):
+        nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        
+        actual_ic = dbg.ic
+        snapshot_ic = self.ss_ic
+        steps = nextic - snapshot_ic
+        
+        snapshot = self.snapshot
+        
+        # Undo last steps
+        for i in range(dbg.ic, nextic,-1):
+            debug("undo ic: ", i)
+            try:
+                dbg.ude[dbg.ic - i - 1]()
+                del dbg.ude[dbg.ic - i -1]
+            except KeyError:
+                pass
+            
+        if snapshot_ic >= nextic:
+            # Position is at a snapshot. Go to parent snapshot and step forward.
+            # TODO
+            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug("snapshotic: ", snapshot_ic)
+            debug("nextic: ", nextic)
+            return
+        
         self.mp.activatesp(snapshot.id, steps)
         raise EpdbExit()
         
@@ -443,6 +479,10 @@ class Epdb(pdb.Pdb):
     
     def user_return(self, frame, return_value):
         """This function is called when a return trap is set here."""
+        
+        callic = self.call_stack.pop()
+        self.rnext_ic[dbg.ic + 1] = callic
+        
         if  self.running_mode == 'continue':
             pass
         elif  self.running_mode == 'next':
@@ -451,6 +491,9 @@ class Epdb(pdb.Pdb):
             frame.f_locals['__return__'] = return_value
             debug('--Return--')
             self.interaction(frame, None)
+    
+    def do_rnext_ic(self, arg):
+        debug(self.rnext_ic)
 
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)
