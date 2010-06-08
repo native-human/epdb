@@ -49,7 +49,7 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 mode = 'normal'
 
 def __import__(*args):
-    #debug("myimport", args[0], sys.path)
+    debug("myimport", args[0], sys.path)
     #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
         return __pythonimport__(*args)
@@ -93,7 +93,7 @@ def __import__(*args):
                 pass
                 #debug("nosuccess", sys.path)
             else:
-                #debug('Importing a module with patching', args[0])
+                debug('Importing a module with patching', args[0])
                 for key in module.__dict__.keys():
                     if key == args[0]:
                         continue
@@ -172,9 +172,9 @@ class Epdb(pdb.Pdb):
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
             #debug ('mode replay')
-            debug('step forward: ', snapshot.step_forward, 'instructions')
+            #debug('step forward: ', snapshot.step_forward, 'instructions')
             self.stopafter = snapshot.step_forward + 1
-            debug('Initial stopafter: ', self.stopafter, 'instructions')
+            #debug('Initial stopafter: ', self.stopafter, 'instructions')
             #self.set_continue()
             return 1
         else:
@@ -217,7 +217,7 @@ class Epdb(pdb.Pdb):
         sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
 
         with open(filename, "rb") as fp:
-            debug(fp.read)
+            #debug(fp.read)
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
         self.run(statement)
@@ -250,6 +250,10 @@ class Epdb(pdb.Pdb):
         # It is filled in user_return
         self.rnext_ic = {}
         
+        # In rcontinue_ln for every execute line number a list of instruction counts
+        # that have executed them is saved. This is needed for reverse continue
+        self.rcontinue_ln = {}
+        
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -257,8 +261,16 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        debug('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, dbg.ic)
+        #debug('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, dbg.ic)
         #debug("stopafter: ", self.stopafter)
+        lineno = frame.f_lineno     # TODO extend with filename so to support different files
+        filename = frame.f_code.co_filename
+        filename = self.canonic(filename)
+        ##debug('Save tuple ',(filename, lineno))
+        try:
+            self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
+        except:
+            self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
         
         if self.running_mode == 'continue':
             dbg.ic += 1
@@ -272,18 +284,18 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         else:
             if self._wait_for_mainpyfile:
-                debug('_wait_for_mainpyfile')
+                #debug('_wait_for_mainpyfile')
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
-                    debug('Not found')
+                    #debug('Not found')
                     return
-                debug('Found', self.stopafter)
+                #debug('Found', self.stopafter)
                 self.make_snapshot()
                 self._wait_for_mainpyfile = 0
                 #self.skip.add("__main__")
             else:
                 dbg.ic += 1
             
-            debug("!!!!!!!!!!")
+            #debug("!!!!!!!!!!")
             if self.starting_ic is None:
                 if frame.f_code.co_filename == self.mainpyfile:
                     #self.starting_ic = self.ic
@@ -292,7 +304,7 @@ class Epdb(pdb.Pdb):
                 #debug(frame.f_code.co_filename, self.mainpyfile)
             # debug('Line is going to be dispatched: ', self.ic)
             
-            debug('stopafter: ', self.stopafter)
+            #debug('stopafter: ', self.stopafter)
             if self.stopafter > 0:
                 #debug('stopafter > 0')
                 self.stopafter -= 1
@@ -305,11 +317,11 @@ class Epdb(pdb.Pdb):
                 self.set_trace()
             
             if self.bp_commands(frame) and self.stopafter == -1:
-                debug("Interaction")
+                #debug("Interaction")
                 self.interaction(frame, None)
         
     def user_call(self, frame, argument_list):
-        debug('User call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno, dbg.ic)
+        #debug('User call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno, dbg.ic)
         
         self.call_stack.append(dbg.ic)
         
@@ -322,11 +334,11 @@ class Epdb(pdb.Pdb):
             self.nocalls += 1
         else:
             if self._wait_for_mainpyfile:
-                debug("User call waiting for mainpyfile")
+                #debug("User call waiting for mainpyfile")
                 return
             #if self.stop_here(frame):
             #    debug('--Call--')
-            debug('Calling interaction')
+            #debug('Calling interaction')
             self.interaction(frame, None)
     
     def stop_here(self, frame):
@@ -460,6 +472,41 @@ class Epdb(pdb.Pdb):
             debug('At a snapshot. Backstepping over a snapshot not implemented yet')
             debug("snapshotic: ", snapshot_ic)
             debug("nextic: ", nextic)
+            return
+        
+        self.mp.activatesp(snapshot.id, steps)
+        raise EpdbExit()
+        
+    def do_rcontinue(self, arg):
+        #nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        # Find the breakpoint with the highest ic
+        highestic = 0
+        for bp in bdb.Breakpoint.bplist:
+            highestic = max(self.rcontinue_ln.get(bp)[-1], highestic)
+            
+        debug("Highest ic found: ", highestic)
+        
+        actual_ic = dbg.ic
+        snapshot_ic = self.ss_ic
+        steps = highestic - snapshot_ic
+        
+        snapshot = self.snapshot
+        
+        # Undo last steps
+        for i in range(dbg.ic, highestic,-1):
+            debug("undo ic: ", i)
+            try:
+                dbg.ude[dbg.ic - i - 1]()
+                del dbg.ude[dbg.ic - i -1]
+            except KeyError:
+                pass
+            
+        if snapshot_ic >= highestic:
+            # Position is at a snapshot. Go to parent snapshot and step forward.
+            # TODO
+            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug("snapshotic: ", snapshot_ic)
+            debug("highestic: ", highestic)
             return
         
         self.mp.activatesp(snapshot.id, steps)
@@ -623,7 +670,7 @@ def main():
 if __name__ == '__main__':
     import epdb
     epdb.main()
-else:
-    debug("ELSEELSE")
+#else:
+#    debug("ELSEELSE")
     #print('Loop finished')
 #print("Finished")

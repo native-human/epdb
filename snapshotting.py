@@ -17,7 +17,7 @@ import shareddict
 
 tmpfd, tmppath = tempfile.mkstemp(".dbg")
 
-log.debug("tmppath", tmppath)
+#log.debug("tmppath", tmppath)
 
 SOCK_DIR = tempfile.mkdtemp()
 
@@ -49,7 +49,7 @@ class Snapshot:
         args = msg.split(' ')
         cmd = args[0]
         self.id = int(args[1])
-        log.debug("Made a snapshot with id {0}".format(self.id))
+        #log.debug("Made a snapshot with id {0}".format(self.id))
         if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
