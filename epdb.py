@@ -257,7 +257,7 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
             dbg.ic += 1
-            if self.nocalls == 0:
+            if self.nocalls <= 0:
                 self.interaction(frame, None)
             if self.break_here(frame):
                 self.interaction(frame, None)
@@ -333,7 +333,8 @@ class Epdb(pdb.Pdb):
 
     def set_continue(self):
         # Debugger overhead needed to count instructions
-        self._set_stopinfo(None, None)
+        #self._set_stopinfo(None, None)
+        self.set_step()
         self.running_mode = 'continue'
 
     def do_snapshot(self, arg, temporary=0):
@@ -430,7 +431,8 @@ class Epdb(pdb.Pdb):
         
     def set_next(self, frame):
         """Stop on the next line in or below the given frame."""
-        self._set_stopinfo(None, None)
+        #self._set_stopinfo(None, None)
+        self.set_step()
         self.running_mode = 'next'
         self.nocalls = 0 # Increased on call - decreased on return
         
