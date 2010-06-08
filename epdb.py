@@ -49,7 +49,7 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 mode = 'normal'
 
 def __import__(*args):
-    debug("myimport", args[0], sys.path)
+    #debug("myimport", args[0], sys.path)
     #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
         return __pythonimport__(*args)
@@ -220,6 +220,7 @@ class Epdb(pdb.Pdb):
             #debug(fp.read)
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
+        builtins.__import__ = __import__            
         self.run(statement)
         
     def init_reversible(self):
