@@ -6,7 +6,7 @@ import debug as log
 
 def randint(a, b):
     def replay(a, b):
-        log.debug('Replaying randint', dbg.ic, dbg.sde)
+        log.debug('Replaying randint', dbg.ic)
         return dbg.sde[dbg.ic]
     def undo(a, b):
         log.debug('undoing randint')

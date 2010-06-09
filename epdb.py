@@ -411,6 +411,9 @@ class Epdb(pdb.Pdb):
         self.set_quit()
         return 1
     
+    def do_replay(self, arg):
+        dbg.mode = 'replay'
+    
     def do_rstep(self, arg):
         actual_ic = dbg.ic
         snapshot_ic = self.ss_ic
@@ -471,7 +474,7 @@ class Epdb(pdb.Pdb):
             except KeyError:
                 pass
             
-        if snapshot_ic >= nextic:
+        if snapshot_ic > nextic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
             debug('At a snapshot. Backstepping over a snapshot not implemented yet')
@@ -489,8 +492,11 @@ class Epdb(pdb.Pdb):
         
         highestic = 0
         for bp in Breakpoint.bplist:
+            debug("Checking Bp: ", bp)
             try:
-                highestic = max(self.rcontinue_ln[bp][-1], highestic)
+                newmax = max(self.rcontinue_ln[bp][-1], highestic)
+                if newmax < dbg.ic:
+                    highestic = newmax
             except KeyError:
                 pass
             
@@ -511,7 +517,7 @@ class Epdb(pdb.Pdb):
             except KeyError:
                 pass
             
-        if snapshot_ic >= highestic:
+        if snapshot_ic > highestic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
             debug('At a snapshot. Backstepping over a snapshot not implemented yet')
