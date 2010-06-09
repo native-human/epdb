@@ -49,8 +49,21 @@ class Listener:
         client,address = self.sock.accept()
         return Connection(client, address=address)
 
+class ServerDict(dict):
+    def __iter__(self):
+        return self.copy()
+
+class ServerList(list):
+    def __iter__(self):
+        return self[:]
+
 def server(dofork=False):
-    shareddictionary = {}
+    sde = ServerDict()
+    bplist = ServerDict()   # weird naming, but conforming to bdb
+    bpbynumber = ServerList()
+    bpbynumber.append(None)
+    breaks = ServerDict()
+    
     try:
         os.unlink('/tmp/shareddict')
     except OSError:
@@ -79,7 +92,13 @@ def server(dofork=False):
                         try:
                             objref,method,args,kargs = pickle.loads(bstream)
                             if objref == 'sde':
-                                r = getattr(shareddictionary, method)(*args, **kargs)
+                                r = getattr(sde, method)(*args, **kargs)
+                            elif objref == 'bplist':
+                                r = getattr(bplist, method)(*args, **kargs)
+                            elif objref == 'bpbynumber':
+                                r = getattr(bpbynumber, method)(*args, **kargs)
+                            elif objref == 'breaks':
+                                r = getattr(breaks, method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
@@ -124,12 +143,12 @@ def client():
     con.close()
     
 class DictProxy:
-    def __init__(self, conn=None):
+    def __init__(self, objref, conn=None):
         if conn:
             self.conn = conn
         else:
             self.conn = connect('/tmp/shareddict')
-        self.objref = 'sde'
+        self.objref = objref
     
     def _remote_invoke(self, method, args, kargs):
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
@@ -147,8 +166,8 @@ class DictProxy:
     def __setitem__(self, idx, value):
         return self._remote_invoke('__setitem__', (idx, value), {})
         
-    def __iter__(self): # TODO this doesn't work
-        return self._remote_invoke('__iter__',(), {})
+    def __iter__(self): 
+        return self._remote_invoke('__iter__',(), {}).__iter__()
 
     def __contains__(self, k):
         return self._remote_invoke('__contains__',(k,), {})
@@ -179,6 +198,74 @@ class DictProxy:
     
     def clear(self):
         return self._remote_invoke('clear',(), {})
+
+class ListProxy:
+    def __init__(self, objref, conn=None):
+        if conn:
+            self.conn = conn
+        else:
+            self.conn = connect('/tmp/shareddict')
+        self.objref = objref
+    
+    def _remote_invoke(self, method, args, kargs):
+        self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
+        t,r = pickle.loads(self.conn.recv())
+        if t == 'RET':
+            return r
+        elif t == 'EXC':
+            raise r
+        else:
+            debug('Unknown return value')
+            
+    def __getitem__(self, idx):
+        return self._remote_invoke('__getitem__', (idx,), {})
+        
+    def __setitem__(self, idx, value):
+        return self._remote_invoke('__setitem__', (idx, value), {})
+        
+    def __iter__(self): 
+        return self._remote_invoke('__iter__',(), {}).__iter__()
+
+    def __contains__(self, k):
+        return self._remote_invoke('__contains__',(k,), {})
+        
+    def __str__(self):
+        return "ListProxy: " + self._remote_invoke('__str__',(), {})
+        
+    def __repr__(self):
+        return "ListProxy: " + self._remote_invoke('__repr__',(), {})
+
+    def __sizeof__(self):
+        return self._remote_invoke('__sizeof__',(), {})
+
+    def append(self, object):
+        return self._remote_invoke('append',(object,), {})
+
+
+    def count(self, value):
+        return self._remote_invoke('count',(value,), {})
+ 
+    def extend(self, iterable):
+        return self._remote_invoke('extend',(iterable,), {})
+ 
+    def index(self, value, *args):
+        return self._remote_invoke('index',(iterable,)+args, {})
+ 
+    def insert(self, index, object):
+        return self._remote_invoke('insert',(index, object), {})
+ 
+    def pop(self, *args):
+        return self._remote_invoke('pop',args, {})
+ 
+    def remove(self, value):
+        return self._remote_invoke('remove',(value,), {})
+ 
+    def reverse(self):
+        return self._remote_invoke('reverse',(), {})
+    
+    def sort(self, key=None, reverse=False):
+        return self._remote_invoke('sort',(key, reverse), {})
+
 
 def shutdown():
     debug("Shutting down")

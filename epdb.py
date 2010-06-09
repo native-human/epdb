@@ -14,7 +14,9 @@ import builtins
 import types
 import _thread
 import configparser
+import shareddict
 from debug import debug
+
 
 #dbgpath = '/home/patrick/myprogs/epdb/dbgmods'
 #sys.path.append(dbgpath)
@@ -168,6 +170,7 @@ class Epdb(pdb.Pdb):
         self.snapshot_id = snapshot.id
         # self.ss_ic = self.ic
         self.ss_ic = dbg.ic
+        
         # debug("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
@@ -225,7 +228,7 @@ class Epdb(pdb.Pdb):
         
     def init_reversible(self):
         self.mp = snapshotting.MainProcess()
-        
+        from breakpoint import Breakpoint
         #self.ic = 0             # Instruction Counter
         dbg.ic = 0
         
@@ -255,6 +258,7 @@ class Epdb(pdb.Pdb):
         # that have executed them is saved. This is needed for reverse continue
         self.rcontinue_ln = {}
         
+        self.breaks = shareddict.DictProxy('breaks')
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -349,12 +353,12 @@ class Epdb(pdb.Pdb):
             return True
         return False
     
-    def break_here(self, frame):
-        #debug('Break here')
-        if pdb.Pdb.break_here(self, frame):
-            #debug('Breakpoint found')
-            return True
-        return False
+    #def break_here(self, frame):
+    #    #debug('Break here')
+    #    if pdb.Pdb.break_here(self, frame):
+    #        #debug('Breakpoint found')
+    #        return True
+    #    return False
 
     def set_continue(self):
         # Debugger overhead needed to count instructions
@@ -481,9 +485,14 @@ class Epdb(pdb.Pdb):
     def do_rcontinue(self, arg):
         #nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
         # Find the breakpoint with the highest ic
+        from breakpoint import Breakpoint
+        
         highestic = 0
-        for bp in bdb.Breakpoint.bplist:
-            highestic = max(self.rcontinue_ln.get(bp)[-1], highestic)
+        for bp in Breakpoint.bplist:
+            try:
+                highestic = max(self.rcontinue_ln[bp][-1], highestic)
+            except KeyError:
+                pass
             
         debug("Highest ic found: ", highestic)
         
@@ -542,6 +551,260 @@ class Epdb(pdb.Pdb):
     
     def do_rnext_ic(self, arg):
         debug(self.rnext_ic)
+    
+    # The following functions are the same as in bdp except for
+    # The usage of the epdb Breakpoint implementation
+    
+    def break_here(self, frame):
+        filename = self.canonic(frame.f_code.co_filename)
+        if not filename in self.breaks:
+            return False
+        lineno = frame.f_lineno
+        if not lineno in self.breaks[filename]:
+            # The line itself has no breakpoint, but maybe the line is the
+            # first line of a function with breakpoint set by function name.
+            lineno = frame.f_code.co_firstlineno
+            if not lineno in self.breaks[filename]:
+                return False
+
+        # flag says ok to delete temp. bp
+        (bp, flag) = effective(filename, lineno, frame)
+        if bp:
+            self.currentbp = bp.number
+            if (flag and bp.temporary):
+                self.do_clear(str(bp.number))
+            return True
+        else:
+            return False
+        
+    def set_break(self, filename, lineno, temporary=0, cond = None,
+                  funcname=None):
+        from breakpoint import Breakpoint
+        filename = self.canonic(filename)
+        import linecache # Import as late as possible
+        line = linecache.getline(filename, lineno)
+        if not line:
+            return 'Line %s:%d does not exist' % (filename,
+                                   lineno)
+        if not filename in self.breaks:
+            self.breaks[filename] = []
+        list = self.breaks[filename]
+        if not lineno in list:
+            list.append(lineno)
+            self.breaks[filename] = list  # This is necessary for the distributed application
+        bp = Breakpoint(filename, lineno, temporary, cond, funcname)
+
+    def clear_break(self, filename, lineno):
+        from breakpoint import Breakpoint
+        filename = self.canonic(filename)
+        if not filename in self.breaks:
+            return 'There are no breakpoints in %s' % filename
+        if lineno not in self.breaks[filename]:
+            return 'There is no breakpoint at %s:%d' % (filename,
+                                    lineno)
+        # If there's only one bp in the list for that file,line
+        # pair, then remove the breaks entry
+        for bp in Breakpoint.bplist[filename, lineno][:]:
+            bp.deleteMe()
+        if (filename, lineno) not in Breakpoint.bplist:
+            self.breaks[filename].remove(lineno)
+        if not self.breaks[filename]:
+            del self.breaks[filename]
+
+    def clear_bpbynumber(self, arg):
+        from breakpoint import Breakpoint
+        try:
+            number = int(arg)
+        except:
+            return 'Non-numeric breakpoint number (%s)' % arg
+        try:
+            bp = Breakpoint.bpbynumber[number]
+        except IndexError:
+            return 'Breakpoint number (%d) out of range' % number
+        if not bp:
+            return 'Breakpoint (%d) already deleted' % number
+        self.clear_break(bp.file, bp.line)
+
+    def clear_all_file_breaks(self, filename):
+        from breakpoint import Breakpoint
+        filename = self.canonic(filename)
+        if not filename in self.breaks:
+            return 'There are no breakpoints in %s' % filename
+        for line in self.breaks[filename]:
+            blist = Breakpoint.bplist[filename, line]
+            for bp in blist:
+                bp.deleteMe()
+        del self.breaks[filename]
+
+    def clear_all_breaks(self):
+        from breakpoint import Breakpoint
+        if not self.breaks:
+            return 'There are no breakpoints'
+        for bp in Breakpoint.bpbynumber:
+            if bp:
+                bp.deleteMe()
+        #self.breaks = {}
+        self.breaks.clear()   # As this is a shared dictionary it is important to use clear
+    
+    def get_break(self, filename, lineno):
+        filename = self.canonic(filename)
+        return filename in self.breaks and \
+            lineno in self.breaks[filename]
+
+    def get_breaks(self, filename, lineno):
+        from breakpoint import Breakpoint
+        filename = self.canonic(filename)
+        if filename in self.breaks:
+            debug("Get_breaks: Filename", filename)
+        return filename in self.breaks and \
+            lineno in self.breaks[filename] and \
+            Breakpoint.bplist[filename, lineno] or []
+
+    def get_file_breaks(self, filename):
+        filename = self.canonic(filename)
+        if filename in self.breaks:
+            return self.breaks[filename]
+        else:
+            return []
+
+    def get_all_breaks(self):
+        return self.breaks
+    
+    def do_break(self, arg, temporary = 0):
+        from breakpoint import Breakpoint
+        # break [ ([filename:]lineno | function) [, "condition"] ]
+        if not arg:
+            if self.breaks:  # There's at least one
+                print("Num Type         Disp Enb   Where", file=self.stdout)
+                for bp in Breakpoint.bpbynumber:
+                    if bp:
+                        bp.bpprint(self.stdout)
+            return
+        # parse arguments; comma has lowest precedence
+        # and cannot occur in filename
+        filename = None
+        lineno = None
+        cond = None
+        comma = arg.find(',')
+        if comma > 0:
+            # parse stuff after comma: "condition"
+            cond = arg[comma+1:].lstrip()
+            arg = arg[:comma].rstrip()
+        # parse stuff before comma: [filename:]lineno | function
+        colon = arg.rfind(':')
+        funcname = None
+        if colon >= 0:
+            filename = arg[:colon].rstrip()
+            f = self.lookupmodule(filename)
+            if not f:
+                print('*** ', repr(filename), end=' ', file=self.stdout)
+                print('not found from sys.path', file=self.stdout)
+                return
+            else:
+                filename = f
+            arg = arg[colon+1:].lstrip()
+            try:
+                lineno = int(arg)
+            except ValueError as msg:
+                print('*** Bad lineno:', arg, file=self.stdout)
+                return
+        else:
+            # no colon; can be lineno or function
+            try:
+                lineno = int(arg)
+            except ValueError:
+                try:
+                    func = eval(arg,
+                                self.curframe.f_globals,
+                                self.curframe_locals)
+                except:
+                    func = arg
+                try:
+                    if hasattr(func, '__func__'):
+                        func = func.__func__
+                    code = func.__code__
+                    #use co_name to identify the bkpt (function names
+                    #could be aliased, but co_name is invariant)
+                    funcname = code.co_name
+                    lineno = code.co_firstlineno
+                    filename = code.co_filename
+                except:
+                    # last thing to try
+                    (ok, filename, ln) = self.lineinfo(arg)
+                    if not ok:
+                        print('*** The specified object', end=' ', file=self.stdout)
+                        print(repr(arg), end=' ', file=self.stdout)
+                        print('is not a function', file=self.stdout)
+                        print('or was not found along sys.path.', file=self.stdout)
+                        return
+                    funcname = ok # ok contains a function name
+                    lineno = int(ln)
+        if not filename:
+            filename = self.defaultFile()
+        # Check for reasonable breakpoint
+        line = self.checkline(filename, lineno)
+        if line:
+            # now set the break point
+            err = self.set_break(filename, line, temporary, cond, funcname)
+            if err: print('***', err, file=self.stdout)
+            else:
+                bp = self.get_breaks(filename, line)[-1]
+                print("Breakpoint %d at %s:%d" % (bp.number,
+                                                                 bp.file,
+                                                                 bp.line), file=self.stdout)
+
+# copied from pdb to make use of epdb's breakpoint implementation
+def effective(file, line, frame):
+    from breakpoint import Breakpoint
+    """Determine which breakpoint for this file:line is to be acted upon.
+
+    Called only if we know there is a bpt at this
+    location.  Returns breakpoint that was triggered and a flag
+    that indicates if it is ok to delete a temporary bp.
+
+    """
+    possibles = Breakpoint.bplist[file,line]
+    for i in range(0, len(possibles)):
+        b = possibles[i]
+        if b.enabled == 0:
+            continue
+        if not bdb.checkfuncname(b, frame):
+            continue
+        # Count every hit when bp is enabled
+        b.hits = b.hits + 1
+        if not b.cond:
+            # If unconditional, and ignoring,
+            # go on to next, else break
+            if b.ignore > 0:
+                b.ignore = b.ignore -1
+                continue
+            else:
+                # breakpoint and marker that's ok
+                # to delete if temporary
+                return (b,1)
+        else:
+            # Conditional bp.
+            # Ignore count applies only to those bpt hits where the
+            # condition evaluates to true.
+            try:
+                val = eval(b.cond, frame.f_globals,
+                       frame.f_locals)
+                if val:
+                    if b.ignore > 0:
+                        b.ignore = b.ignore -1
+                        # continue
+                    else:
+                        return (b,1)
+                # else:
+                #   continue
+            except:
+                # if eval fails, most conservative
+                # thing is to stop on breakpoint
+                # regardless of ignore count.
+                # Don't delete temporary,
+                # as another hint to user.
+                return (b,0)
+    return (None, None)
 
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)

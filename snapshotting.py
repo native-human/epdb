@@ -82,12 +82,12 @@ class Snapshot:
                         self.step_forward = steps
                         #print('Trying to connect to the server')
                         #dbg.connect()
-                        dbg.sde = shareddict.DictProxy()
+                        dbg.sde = shareddict.DictProxy('sde')
                         #print('Connected')
                         break
         else:
             #dbg.connect()
-            dbg.sde = shareddict.DictProxy()
+            dbg.sde = shareddict.DictProxy('sde')
             #log.debug('childpid %d'% pid)
             self.step_forward = -1
         
@@ -271,7 +271,7 @@ class MainProcess:
                             sys.exit(0)
         else:
             #dbg.connect()
-            dbg.sde = shareddict.DictProxy()
+            dbg.sde = shareddict.DictProxy('sde')
     
     def list_savepoints(self):
         """Tell the controller to list all snapshots."""
