@@ -259,6 +259,7 @@ class Epdb(pdb.Pdb):
         self.rcontinue_ln = {}
         
         self.breaks = shareddict.DictProxy('breaks')
+        self.snapshots = shareddict.DictProxy('snapshots')
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -494,6 +495,11 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
+                # TODO here is maybe a bug: rontinue_ln may has values higher than
+                # the current ic?
+                # Thought over it again it seems to be ok, as there cannot be any
+                # higher instruction counts
+                # Maybe it isn't necessary to have a stack of instruction counts
                 newmax = max(self.rcontinue_ln[bp][-1], highestic)
                 if newmax < dbg.ic:
                     highestic = newmax
