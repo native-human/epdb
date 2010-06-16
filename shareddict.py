@@ -63,6 +63,7 @@ def server(dofork=False):
     bpbynumber = ServerList()
     bpbynumber.append(None)
     breaks = ServerDict()
+    snapshots = ServerList()
     
     try:
         os.unlink('/tmp/shareddict')
@@ -99,6 +100,8 @@ def server(dofork=False):
                                 r = getattr(bpbynumber, method)(*args, **kargs)
                             elif objref == 'breaks':
                                 r = getattr(breaks, method)(*args, **kargs)
+                            elif objref == 'snapshots':
+                                r = getattr(snapshots, method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':

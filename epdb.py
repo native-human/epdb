@@ -142,6 +142,11 @@ class EpdbPostMortem(Exception):
     """Raised when the program finishes and enters a interactive shell"""
     pass
 
+class SnapshotData:
+    def __init__(self, id, ic):
+        self.id = id
+        self.ic = ic
+
 class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle'])
@@ -161,6 +166,25 @@ class Epdb(pdb.Pdb):
         #debug("return", module_name.startswith('__'))
         return module_name.startswith('__')
     
+    def findsnapshot(self, ic):
+        """Looks for a snpashot to use for stepping backwards.
+        Returns snapshot data"""
+        debug("findsnapshot", ic)
+        bestic = -1
+        bestsnapshot = None
+        for e in self.snapshots:
+            debug("try snapshot: ",e.id,e.ic)
+            if e.ic <= ic:
+                if e.ic > bestic:
+                    bestic = e.ic
+                    bestsnapshot = e
+                    debug("bestsnapshot found")
+                else:
+                    debug("snapshot ic smaller than best ic")
+            else:
+                debug("snapshot ic bigger than current ic")
+        return bestsnapshot
+                
     def make_snapshot(self):
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
@@ -170,6 +194,9 @@ class Epdb(pdb.Pdb):
         self.snapshot_id = snapshot.id
         # self.ss_ic = self.ic
         self.ss_ic = dbg.ic
+        
+        snapshotdata = SnapshotData(id=self.snapshot_id, ic=dbg.ic)
+        self.snapshots.append(snapshotdata)
         
         # debug("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
@@ -259,7 +286,7 @@ class Epdb(pdb.Pdb):
         self.rcontinue_ln = {}
         
         self.breaks = shareddict.DictProxy('breaks')
-        self.snapshots = shareddict.DictProxy('snapshots')
+        self.snapshots = shareddict.ListProxy('snapshots')
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -268,7 +295,7 @@ class Epdb(pdb.Pdb):
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
         #debug('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, dbg.ic)
-        #debug("stopafter: ", self.stopafter)
+        debug("dispatch stopafter: ", self.stopafter)
         lineno = frame.f_lineno     # TODO extend with filename so to support different files
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
@@ -312,11 +339,11 @@ class Epdb(pdb.Pdb):
             
             #debug('stopafter: ', self.stopafter)
             if self.stopafter > 0:
-                #debug('stopafter > 0')
+                debug('stopafter > 0', self.stopafter)
                 self.stopafter -= 1
             
             if self.stopafter == 0:
-                #debug('stopafter == 0')
+                debug('stopafter == 0')
                 self.stopafter = -1
                 debug(dbg.mode)
                 dbg.mode = 'normal'
@@ -338,13 +365,15 @@ class Epdb(pdb.Pdb):
             pass
         elif self.running_mode == 'next':
             self.nocalls += 1
+        elif self.running_mode == 'step':
+            pass
         else:
             if self._wait_for_mainpyfile:
                 #debug("User call waiting for mainpyfile")
                 return
             #if self.stop_here(frame):
             #    debug('--Call--')
-            #debug('Calling interaction')
+            debug('Calling interaction', self.running_mode)
             self.interaction(frame, None)
     
     def stop_here(self, frame):
@@ -370,7 +399,10 @@ class Epdb(pdb.Pdb):
     def do_snapshot(self, arg, temporary=0):
         #global mode
         #snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
-        self.make_snapshot()
+        r = self.make_snapshot()
+        if self.stopafter > 0:
+            self.stopafter -= 1
+        return r
     
     def do_restore(self, arg):
         try:
@@ -394,6 +426,10 @@ class Epdb(pdb.Pdb):
         raise EpdbExit()
     
     def do_snapshots(self, arg):
+        print("id        ic")
+        print("------------")
+        for e in self.snapshots:
+            print(e.id, e.ic)
         self.mp.list_savepoints()
     
     def do_stopafter(self, arg):
@@ -440,24 +476,36 @@ class Epdb(pdb.Pdb):
         if snapshot_ic == actual_ic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
-            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            if self.psnapshot == None:
-                #debugging('Backstepping over a snapshot to the beginning of the program not implemented yet.')
-                self.snapshot = None
-                self.psnapshot = None
-                dbg.mode = 'replay'
-                self.stopafter = steps
-                pdb.Pdb.do_run(self, None) # raises restart exception
-                # return
-            steps = actual_ic - self.pss_ic - 1
-            self.mp.activatesp(self.psnapshot.id, steps)
+            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug("Backstepping over a snapshot")
+            s = self.findsnapshot(dbg.ic-1)
+            steps = dbg.ic - s.ic - 1
+            debug('snapshot activation', snapshot.id, steps)
+            self.mp.activatesp(s.id, steps)
             raise EpdbExit()
+            #debug("s.id: {0} s.ic {1}".format(s.id, s.ic))
+            #return
+            #if self.psnapshot == None:
+            #    #debugging('Backstepping over a snapshot to the beginning of the program not implemented yet.')
+            #    self.snapshot = None
+            #    self.psnapshot = None
+            #    dbg.mode = 'replay'
+            #    self.stopafter = steps
+            #    pdb.Pdb.do_run(self, None) # raises restart exception
+            #    # return
+            #steps = actual_ic - self.pss_ic - 1
+            #self.mp.activatesp(self.psnapshot.id, steps)
+            #raise EpdbExit()
         
-        debug('snapshot activation')
+        debug('snapshot activation', snapshot.id, steps)
         self.mp.activatesp(snapshot.id, steps)
         raise EpdbExit()
         
     def do_rnext(self, arg):
+        if dbg.ic == 0:
+            debug("At the beginning of the program. Can't step back")
+            return
+        
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
         
         actual_ic = dbg.ic
@@ -476,12 +524,19 @@ class Epdb(pdb.Pdb):
                 pass
             
         if snapshot_ic > nextic:
-            # Position is at a snapshot. Go to parent snapshot and step forward.
+            # Position is before last snapshot. Go to parent snapshot and step forward.
             # TODO
-            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            debug("snapshotic: ", snapshot_ic)
-            debug("nextic: ", nextic)
-            return
+            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug('Backnexting over a snapshot')
+            s = self.findsnapshot(nextic)
+            steps = nextic - s.ic
+            debug('snapshot activation', snapshot.id, steps)
+            self.mp.activatesp(s.id, steps)
+            raise EpdbExit()
+            
+            #debug("snapshotic: ", snapshot_ic)
+            #debug("nextic: ", nextic)
+            #return
         
         self.mp.activatesp(snapshot.id, steps)
         raise EpdbExit()
@@ -526,9 +581,16 @@ class Epdb(pdb.Pdb):
         if snapshot_ic > highestic:
             # Position is at a snapshot. Go to parent snapshot and step forward.
             # TODO
-            debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            debug("snapshotic: ", snapshot_ic)
-            debug("highestic: ", highestic)
+            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
+            debug('At a snapshot. Backcontinueing over a snapshot')
+            #debug("snapshotic: ", snapshot_ic)
+            #debug("highestic: ", highestic)
+            s = self.findsnapshot(highestic)
+            #steps = dbg.ic - s.ic - 1
+            steps = highestic - s.ic
+            debug('snapshot activation', snapshot.id, steps)
+            self.mp.activatesp(s.id, steps)
+            raise EpdbExit()
             return
         
         self.mp.activatesp(snapshot.id, steps)
@@ -541,6 +603,12 @@ class Epdb(pdb.Pdb):
         self.running_mode = 'next'
         self.nocalls = 0 # Increased on call - decreased on return
         
+    def do_step(self, arg):
+        self.set_step()
+        self.running_mode = 'step'
+        return 1
+    do_s = do_step # otherwise the pdb impl is called
+        
     def set_quit(self):
         # debug('quit set')
         #self.mp.quit()
@@ -548,14 +616,19 @@ class Epdb(pdb.Pdb):
     
     def user_return(self, frame, return_value):
         """This function is called when a return trap is set here."""
-        
-        callic = self.call_stack.pop()
+        try:
+            callic = self.call_stack.pop()
+        except:
+            #TODO this usually happens
+            debug("the program has finished")
         self.rnext_ic[dbg.ic + 1] = callic
         
         if  self.running_mode == 'continue':
             pass
         elif  self.running_mode == 'next':
             self.nocalls -= 1
+        elif  self.running_mode == 'step':
+            pass
         else:
             frame.f_locals['__return__'] = return_value
             debug('--Return--')
