@@ -452,11 +452,16 @@ class Epdb(pdb.Pdb):
         dbg.mode = 'replay'
     
     def do_rstep(self, arg):
-        actual_ic = dbg.ic
-        snapshot_ic = self.ss_ic
-        steps = actual_ic - snapshot_ic - 1
+        if dbg.ic == 0:
+            debug("At the beginning of the program. Can't step back")
+            return
         
-        snapshot = self.snapshot
+        actual_ic = dbg.ic
+        
+        s = self.findsnapshot(dbg.ic-1)
+        if s == None:
+            debug("No snapshot made. Can't step back")
+            return
         
         # Undo last step
         try:
@@ -465,40 +470,13 @@ class Epdb(pdb.Pdb):
         except KeyError:
             pass
         
-        if dbg.ic == 0:
-            debug("At the beginning of the program. Can't step back")
-            return
-        
-        if snapshot == None:
+        if s == None:
             debug("No snapshot made. Can't step back")
             return
         
-        if snapshot_ic == actual_ic:
-            # Position is at a snapshot. Go to parent snapshot and step forward.
-            # TODO
-            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            debug("Backstepping over a snapshot")
-            s = self.findsnapshot(dbg.ic-1)
-            steps = dbg.ic - s.ic - 1
-            debug('snapshot activation', snapshot.id, steps)
-            self.mp.activatesp(s.id, steps)
-            raise EpdbExit()
-            #debug("s.id: {0} s.ic {1}".format(s.id, s.ic))
-            #return
-            #if self.psnapshot == None:
-            #    #debugging('Backstepping over a snapshot to the beginning of the program not implemented yet.')
-            #    self.snapshot = None
-            #    self.psnapshot = None
-            #    dbg.mode = 'replay'
-            #    self.stopafter = steps
-            #    pdb.Pdb.do_run(self, None) # raises restart exception
-            #    # return
-            #steps = actual_ic - self.pss_ic - 1
-            #self.mp.activatesp(self.psnapshot.id, steps)
-            #raise EpdbExit()
-        
-        debug('snapshot activation', snapshot.id, steps)
-        self.mp.activatesp(snapshot.id, steps)
+        steps = dbg.ic - s.ic - 1
+        debug('snapshot activation', s.id, steps)
+        self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
     def do_rnext(self, arg):
@@ -508,11 +486,10 @@ class Epdb(pdb.Pdb):
         
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
         
-        actual_ic = dbg.ic
-        snapshot_ic = self.ss_ic
-        steps = nextic - snapshot_ic
-        
-        snapshot = self.snapshot
+        s = self.findsnapshot(nextic)
+        if s == None:
+            debug("No snapshot made. Can't step back")
+            return
         
         # Undo last steps
         for i in range(dbg.ic, nextic,-1):
@@ -522,30 +499,19 @@ class Epdb(pdb.Pdb):
                 del dbg.ude[dbg.ic - i -1]
             except KeyError:
                 pass
-            
-        if snapshot_ic > nextic:
-            # Position is before last snapshot. Go to parent snapshot and step forward.
-            # TODO
-            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            debug('Backnexting over a snapshot')
-            s = self.findsnapshot(nextic)
-            steps = nextic - s.ic
-            debug('snapshot activation', snapshot.id, steps)
-            self.mp.activatesp(s.id, steps)
-            raise EpdbExit()
-            
-            #debug("snapshotic: ", snapshot_ic)
-            #debug("nextic: ", nextic)
-            #return
         
-        self.mp.activatesp(snapshot.id, steps)
+        steps = nextic - s.ic
+        debug('snapshot activation', s.id, steps)
+        self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
     def do_rcontinue(self, arg):
-        #nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        if dbg.ic == 0:
+            debug("At the beginning of the program. Can't step back")
+            return
+
         # Find the breakpoint with the highest ic
         from breakpoint import Breakpoint
-        
         highestic = 0
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
@@ -562,13 +528,12 @@ class Epdb(pdb.Pdb):
                 pass
             
         debug("Highest ic found: ", highestic)
-        
-        actual_ic = dbg.ic
-        snapshot_ic = self.ss_ic
-        steps = highestic - snapshot_ic
-        
-        snapshot = self.snapshot
-        
+
+        s = self.findsnapshot(highestic)
+        if s == None:
+            debug("No snapshot made. Can't step back")
+            return
+
         # Undo last steps
         for i in range(dbg.ic, highestic,-1):
             debug("undo ic: ", i)
@@ -578,22 +543,9 @@ class Epdb(pdb.Pdb):
             except KeyError:
                 pass
             
-        if snapshot_ic > highestic:
-            # Position is at a snapshot. Go to parent snapshot and step forward.
-            # TODO
-            #debug('At a snapshot. Backstepping over a snapshot not implemented yet')
-            debug('At a snapshot. Backcontinueing over a snapshot')
-            #debug("snapshotic: ", snapshot_ic)
-            #debug("highestic: ", highestic)
-            s = self.findsnapshot(highestic)
-            #steps = dbg.ic - s.ic - 1
-            steps = highestic - s.ic
-            debug('snapshot activation', snapshot.id, steps)
-            self.mp.activatesp(s.id, steps)
-            raise EpdbExit()
-            return
-        
-        self.mp.activatesp(snapshot.id, steps)
+        steps = highestic - s.ic
+        debug('snapshot activation', s.id, steps)
+        self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
     def set_next(self, frame):
