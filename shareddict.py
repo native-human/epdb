@@ -51,19 +51,136 @@ class Listener:
 
 class ServerDict(dict):
     def __iter__(self):
-        return self.copy()
+        return dict.copy(self)
+    def keys(self):
+        return list(dict.keys(self))
+    def _copy(self): # The normal copy version returns a dict
+        r = ServerDict()
+        r.update(self)
+        return r
 
 class ServerList(list):
     def __iter__(self):
         return self[:]
+        
+class ServerTimeline:
+    def __init__(self, timelines, name="head", snapshots=[], sde=None, ic=0):
+        self.snapshots = snapshots
+        self.timelines = timelines
+        self.name = name
+        self.firstic = 0
+        self.lastic = 0
+        self.ic = 0
+        if name in timelines.sde_dict.keys():
+            raise Exception("Name already exist in sde")
+        if sde:
+            timelines.sde_dict[name] = sde
+        else:
+            timelines.sde_dict[name] = ServerDict()
+    
+    def _add_by_id(self, snapshotid):
+        try:
+            self.timelines.snapshotdict[snapshotid].references += 1
+            self.snapshots.append(snapshotid)
+        except:
+            raise Exception("Snapshot doesn't exist " + str(snaphotid))
+        
+    def add(self, snapshot):
+        """Adds a new snapshot to the timeline"""
+        if hasattr(snapshot, 'id'):
+            self._add_by_id(snapshot.id)
+        else:
+            if type(snapshot) == int or type(snapshot) == long:
+                self._add_by_id(snapshot)
+            else:
+                raise Exception("Couldn't add snapshot")
+    
+    def show(self):
+        debug("Showing Timeline:", self.name)
+        for e in self.snapshots:
+            debug(e)
+        debug('')
+    
+    def copy(self, name, ic):
+        """Creates a copy of the timeline. name is the new name of the timeline
+        ic the instruction count. ic is used to set the sde dictionary correctly"""
+        oldsde = self.timelines.sde_dict[self.name].copy()
+        sde = {k:oldsde[k] for k in oldsde if k < ic}
+        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde)
+        for k in self.snapshots:
+            self.timelines.snapshotdict[k].references += 1
+        self.timelines.add(copy)
+        return "timeline." + name
+    
+    def get_sde(self):
+        return "sde." + self.name
+    
+    def get_name(self):
+        return self.name
+    
+    def deactivate(self, ic):
+        """Deactivate timeline, saves the instruction count"""
+        self.ic = ic
+        
+    def get_ic(self):
+        return self.ic
 
+class ServerTimelines:
+    def __init__(self, snapshotdict, sde_dict):
+        self.snapshotdict = snapshotdict
+        self.sde_dict = sde_dict
+        self.timelines = {} # name:timeline
+        self.current_timeline = None
+    
+    def _get(self, name):
+        """Returns a Server Timeline"""
+        return self.timelines[name]
+    
+    def get(self, name):
+        """Returns objref to the server timeline"""
+        if name in self.timelines.keys():
+            return "timeline."+name
+        
+    def get_current_timeline(self):
+        """Returns the current timeline"""
+        return "timeline." + self.current_timeline
+        
+    def set_current_timeline(self, name):
+        """Sets the current timeline"""
+        if not name in self.timelines:
+            raise Exception("Timeline does not exist")
+        self.current_timeline = name
+        
+    def new_timeline(self, name="head", snapshotdict={}):
+        """Creates a new timeline and returns a objref"""
+        if name in self.timelines.keys():
+            raise Exception("Timeline with this name already exist")
+        new = ServerTimeline(self, name)
+        self.timelines[new.name] = new
+        r = "timeline." + new.name
+        return r
+    
+    def add(self, timeline):
+        """Adds a new timeline to the dict. Doesn't change the references on the snapshots"""
+        if timeline.name in self.timelines:
+            raise Exception("Timeline already exist")
+        self.timelines[timeline.name] = timeline
+    
+    def show(self):
+        debug("Show values")
+        for k in self.timelines.keys():
+            debug(self.timelines[k].name)
+            
 def server(dofork=False):
     sde = ServerDict()
     bplist = ServerDict()   # weird naming, but conforming to bdb
     bpbynumber = ServerList()
     bpbynumber.append(None)
     breaks = ServerDict()
-    snapshots = ServerList()
+    snapshots = ServerDict()
+    sde_dict = {}
+    timelines = ServerTimelines(snapshots, sde_dict)
+    #current_timeline = ServerTimeline(snapshots, timelines)
     
     try:
         os.unlink('/tmp/shareddict')
@@ -102,11 +219,22 @@ def server(dofork=False):
                                 r = getattr(breaks, method)(*args, **kargs)
                             elif objref == 'snapshots':
                                 r = getattr(snapshots, method)(*args, **kargs)
+                            elif objref == 'timelines':
+                                debug('timelines called', method, args, kargs)
+                                r = getattr(timelines, method)(*args, **kargs)
+                                debug('timelines success')
+                            elif objref.startswith('timeline.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(timelines._get(id), method)(*args, **kargs)
+                            elif objref.startswith('sde.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(sde_dict[id], method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
                                     do_quit = True
                         except Exception as e:
+                            #raise e
                             conn.send(pickle.dumps(('EXC', e)))
                         else:
                             conn.send(pickle.dumps(('RET', r)))
@@ -269,7 +397,89 @@ class ListProxy:
     def sort(self, key=None, reverse=False):
         return self._remote_invoke('sort',(key, reverse), {})
 
+class TimelineProxy:
+    def __init__(self, objref, conn=None):
+        if conn:
+            self.conn = conn
+        else:
+            self.conn = connect('/tmp/shareddict')
+        self.objref = objref
+    
+    def _remote_invoke(self, method, args, kargs):
+        self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
+        t,r = pickle.loads(self.conn.recv())
+        if t == 'RET':
+            return r
+        elif t == 'EXC':
+            raise r
+        else:
+            debug('Unknown return value')
+            
+    def add(self, snapshot):
+        return self._remote_invoke('add',(snapshot,), {})
+        
+    def show(self):
+        return self._remote_invoke('show',(), {})
+        
+    def copy(self, name, ic):
+        objref = self._remote_invoke('copy',(name, ic), {})
+        proxy = TimelineProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def get_name(self):
+        return self._remote_invoke('get_name',(), {})
+        
+    def get_sde(self):
+        objref = self._remote_invoke('get_sde',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def deactivate(self, ic):
+        return self._remote_invoke('deactivate',(ic,), {})
+        
+    def get_ic(self):
+        return self._remote_invoke('get_ic',(), {})
+        
 
+class TimelinesProxy:
+    def __init__(self, objref="timelines", conn=None):
+        if conn:
+            self.conn = conn
+        else:
+            self.conn = connect('/tmp/shareddict')
+        self.objref = objref
+    
+    def _remote_invoke(self, method, args, kargs):
+        self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
+        t,r = pickle.loads(self.conn.recv())
+        if t == 'RET':
+            return r
+        elif t == 'EXC':
+            raise r
+        else:
+            debug('Unknown return value')
+    
+    def get(self, name):
+        objref = self._remote_invoke('get',(name,), {})
+        proxy = TimelineProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def new_timeline(self, name="head", snapshotdict={}):
+        objref = self._remote_invoke('new_timeline',(name,snapshotdict), {})
+        proxy = TimelineProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def get_current_timeline(self):
+        objref = self._remote_invoke('get_current_timeline',(), {})
+        proxy = TimelineProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def set_current_timeline(self, name):
+        return self._remote_invoke('set_current_timeline',(name,), {})
+    
+    def show(self):
+        return self._remote_invoke('show',(), {})
+            
 def shutdown():
     debug("Shutting down")
     conn = connect('/tmp/shareddict')
@@ -278,11 +488,16 @@ def shutdown():
 
 if __name__ == '__main__':
     server(dofork=True)
-    sd = DictProxy()
-    if os.fork():
-        sd[1] = {'a':'b'}
-    else:
-        time.sleep(0.1)
-        debug(sd[1]['a'])
-        shutdown()
- 
+    tls = TimelinesProxy()
+    tl = tls.new_timeline()
+    tls.show()
+    tl.show()
+    shutdown()
+    #sd = DictProxy()
+    #if os.fork():
+    #    sd[1] = {'a':'b'}
+    #else:
+    #    time.sleep(0.1)
+    #    debug(sd[1]['a'])
+    #    shutdown()
+    #

@@ -82,12 +82,17 @@ class Snapshot:
                         self.step_forward = steps
                         #print('Trying to connect to the server')
                         #dbg.connect()
-                        dbg.sde = shareddict.DictProxy('sde')
+                        dbg.current_timeline = dbg.timelines.get_current_timeline()
+                        dbg.sde = dbg.current_timeline.get_sde()
+                        #dbg.sde = shareddict.DictProxy('sde')
                         #print('Connected')
                         break
         else:
             #dbg.connect()
-            dbg.sde = shareddict.DictProxy('sde')
+            #dbg.sde = dbg.current_timeline.get_sde()
+            dbg.current_timeline = dbg.timelines.get_current_timeline()
+            dbg.sde = dbg.current_timeline.get_sde()
+            #dbg.sde = shareddict.DictProxy('sde')
             #log.debug('childpid %d'% pid)
             self.step_forward = -1
         
@@ -271,9 +276,14 @@ class MainProcess:
                             sys.exit(0)
         else:
             #dbg.connect()
-            dbg.sde = shareddict.DictProxy('sde')
+            dbg.timelines = shareddict.TimelinesProxy()
+            dbg.current_timeline = dbg.timelines.new_timeline()
+            name = dbg.current_timeline.get_name() 
+            dbg.timelines.set_current_timeline(name)
+            dbg.sde = dbg.current_timeline.get_sde()
+            #dbg.sde = shareddict.DictProxy('sde')
     
-    def list_savepoints(self):
+    def list_savepoints(self):  # TODO rename to snapshot
         """Tell the controller to list all snapshots."""
         log.debug("Send List Savepoints")
         self.debuggee.send('showlist')

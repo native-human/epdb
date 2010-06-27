@@ -17,7 +17,6 @@ import configparser
 import shareddict
 from debug import debug
 
-
 #dbgpath = '/home/patrick/myprogs/epdb/dbgmods'
 #sys.path.append(dbgpath)
 #sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
@@ -146,6 +145,7 @@ class SnapshotData:
     def __init__(self, id, ic):
         self.id = id
         self.ic = ic
+        self.references = 0
 
 class Epdb(pdb.Pdb):
     def __init__(self):
@@ -172,7 +172,8 @@ class Epdb(pdb.Pdb):
         debug("findsnapshot", ic)
         bestic = -1
         bestsnapshot = None
-        for e in self.snapshots:
+        for k in self.snapshots.keys():
+            e = self.snapshots[k]
             debug("try snapshot: ",e.id,e.ic)
             if e.ic <= ic:
                 if e.ic > bestic:
@@ -196,8 +197,9 @@ class Epdb(pdb.Pdb):
         self.ss_ic = dbg.ic
         
         snapshotdata = SnapshotData(id=self.snapshot_id, ic=dbg.ic)
-        self.snapshots.append(snapshotdata)
+        self.snapshots[snapshotdata.id] = snapshotdata
         
+        dbg.current_timeline.add(snapshotdata.id)
         # debug("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
@@ -285,8 +287,11 @@ class Epdb(pdb.Pdb):
         # that have executed them is saved. This is needed for reverse continue
         self.rcontinue_ln = {}
         
+        # steps from last snapshot
+        self.stepsfromlastss = None
+        
         self.breaks = shareddict.DictProxy('breaks')
-        self.snapshots = shareddict.ListProxy('snapshots')
+        self.snapshots = shareddict.DictProxy('snapshots')
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -426,9 +431,11 @@ class Epdb(pdb.Pdb):
         raise EpdbExit()
     
     def do_snapshots(self, arg):
+        """Snapshots lists all snapshots"""
         print("id        ic")
         print("------------")
-        for e in self.snapshots:
+        for k in self.snapshots.keys():
+            e = self.snapshots[k]
             print(e.id, e.ic)
         self.mp.list_savepoints()
     
@@ -442,6 +449,37 @@ class Epdb(pdb.Pdb):
     def do_ic(self, arg):
         debug('The instruction count is:', dbg.ic)
         
+    def do_timelines(self, arg):
+        dbg.timelines.show()
+    
+    def do_switch_timeline(self, arg):
+        """Switch to another timeline"""
+        #try:
+        timeline = dbg.timelines.get(arg)
+        #except:
+        #    debug("Timeline '",arg,"' dosn't exist", sep='')
+        #    return    
+        dbg.current_timeline.deactivate(dbg.ic)
+        dbg.ic = timeline.get_ic()
+        dbg.sde = timeline.get_sde()
+        dbg.timelines.set_current_timeline(timeline.get_name())
+        dbg.current_timeline = timeline
+        snapshot = self.findsnapshot(dbg.ic)
+        
+    def do_current_timeline(self, arg):
+        dbg.current_timeline.show()
+        
+    def do_newtimeline(self, arg):
+        if arg.strip() == '':
+            debug("You need to supply a name for the new timeline")
+            return
+        newtimeline = dbg.current_timeline.copy(arg.strip(), dbg.ic)
+        dbg.current_timeline.deactivate(dbg.ic)
+        #dbg.ic = newtimeline.get_ic() # not necessary here because it is the same as in the previous one
+        dbg.sde = newtimeline.get_sde()
+        dbg.timelines.set_current_timeline(newtimeline.get_name())
+        dbg.current_timeline = newtimeline
+        
     def do_quit(self, arg):
         self._user_requested_quit = 1
         self.mp.quit()
@@ -450,6 +488,9 @@ class Epdb(pdb.Pdb):
     
     def do_replay(self, arg):
         dbg.mode = 'replay'
+    
+    def do_mode(self, arg):
+        debug("mode: ", dbg.mode)
     
     def do_rstep(self, arg):
         if dbg.ic == 0:

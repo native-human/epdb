@@ -6,6 +6,11 @@ import multiprocessing.util
 
 multiprocessing.util.log_to_stderr()
 
+timelines = None
+
+current_timeline = None
+
+# mode can be of 'normal', 'replay', 'redo', 'undo'
 mode = 'normal'
 
 # sde ... side effects dictionary ic:effect effect is a function
