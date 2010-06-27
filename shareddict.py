@@ -220,9 +220,7 @@ def server(dofork=False):
                             elif objref == 'snapshots':
                                 r = getattr(snapshots, method)(*args, **kargs)
                             elif objref == 'timelines':
-                                debug('timelines called', method, args, kargs)
                                 r = getattr(timelines, method)(*args, **kargs)
-                                debug('timelines success')
                             elif objref.startswith('timeline.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(timelines._get(id), method)(*args, **kargs)
@@ -234,7 +232,6 @@ def server(dofork=False):
                                 if method == 'shutdown':
                                     do_quit = True
                         except Exception as e:
-                            #raise e
                             conn.send(pickle.dumps(('EXC', e)))
                         else:
                             conn.send(pickle.dumps(('RET', r)))
@@ -493,11 +490,3 @@ if __name__ == '__main__':
     tls.show()
     tl.show()
     shutdown()
-    #sd = DictProxy()
-    #if os.fork():
-    #    sd[1] = {'a':'b'}
-    #else:
-    #    time.sleep(0.1)
-    #    debug(sd[1]['a'])
-    #    shutdown()
-    #

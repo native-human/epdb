@@ -11,13 +11,7 @@ import debug as log
 import dbg
 import shareddict
 
-#log = logging.getLogger('socket.test')
-#log.addHandler(logging.StreamHandler(sys.stderr))
-#log.setLevel(logging.DEBUG)
-
 tmpfd, tmppath = tempfile.mkstemp(".dbg")
-
-#log.debug("tmppath", tmppath)
 
 SOCK_DIR = tempfile.mkdtemp()
 
@@ -35,8 +29,6 @@ class ControllerExit(Exception):
 
 class Snapshot:
     def __init__(self, ic, psnapshot):
-        #log.debug('Savepoint fork')
-        #log.debug('parentpid: %d %d' % (pid, os.getpid()))
         self.ic = ic
         self.psnapshot = psnapshot
         # This is done before forking because of synchronization
@@ -49,7 +41,6 @@ class Snapshot:
         args = msg.split(' ')
         cmd = args[0]
         self.id = int(args[1])
-        #log.debug("Made a snapshot with id {0}".format(self.id))
         if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
@@ -71,29 +62,19 @@ class Snapshot:
                         del self.cpids[idx]
                     #log.debug('Savepoint quit')
                     raise SnapshotExit()
-                    # sys.exit(0)
                 if cmd == "run":
                     steps = int(args[1])
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
                     else:    
-                        #log.debug.info("Child process runs")
                         self.step_forward = steps
-                        #print('Trying to connect to the server')
-                        #dbg.connect()
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
-                        #dbg.sde = shareddict.DictProxy('sde')
-                        #print('Connected')
                         break
         else:
-            #dbg.connect()
-            #dbg.sde = dbg.current_timeline.get_sde()
             dbg.current_timeline = dbg.timelines.get_current_timeline()
             dbg.sde = dbg.current_timeline.get_sde()
-            #dbg.sde = shareddict.DictProxy('sde')
-            #log.debug('childpid %d'% pid)
             self.step_forward = -1
         
 class Messaging:
@@ -150,7 +131,6 @@ class SavepointConnection:
         log.debug('cmd')
     
     def activate(self, steps=-1):
-        #log.info('Activate Savepoint with {0}'.format(steps))
         self.msging.send('run {0}'.format(steps))
     
     def quit(self):
@@ -160,7 +140,6 @@ class MainProcess:
     """This class forks the controller process. The controller process ends up
     in a loop. The other process returns with a connection to the controller"""
     def __init__(self):
-        #log.info("start process")
         debuggee_sock, controller_sock = socket.socketpair()
         debuggee = Messaging(debuggee_sock)
         self.debuggee = debuggee
@@ -168,7 +147,6 @@ class MainProcess:
         backupcontroller = controller # TODO remove
         sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sp_sock.bind(SOCK_NAME)
-        #log.info("bound")
         sp_sock.listen(10)
         self.savepoint_connections = []
         self.do_quit = False
@@ -176,10 +154,8 @@ class MainProcess:
         
         pid = os.fork()
         if pid:
-            #dbg.start_server()
             max_id = 0
             p = select.poll()
-            #log.info('Socket: %s' % controller.sock)
             p.register(controller.sock, select.POLLIN|select.POLLPRI)
             p.register(sp_sock, select.POLLIN|select.POLLPRI)
             while True:
@@ -189,7 +165,6 @@ class MainProcess:
                         shareddict.shutdown()
                         os.waitpid(pid,0)
                         os.unlink(SOCK_NAME)
-                        #log.info('control quit')
                         sys.exit(0)
                 for event in list:
                     fd, ev = event
@@ -197,25 +172,17 @@ class MainProcess:
                     # Controller Code
                     
                     if fd == controller.sock.fileno():
-                        #log.info('controller fd: %d' % controller.sock.fileno())
                         line = controller.recv()
-                        #log.info('line: %s:' % line)
                         words = line.rstrip().split(" ")
                         cmd = str(words[0])
-                        #log.info('cmd: "%s"' % cmd)
                         if cmd == "end":
-                            #log.info('end received')
                             for conn in self.savepoint_connections:
-                                #log.info("quit sent")
                                 try:
                                     conn.quit()
                                 except:
                                     log.debug("Warning: Shuting down of Savepoint failed")
                             self.do_quit = True
-                            #os.unlink(SOCK_NAME)
-                            #sys.exit(0)
                         elif cmd == 'connect':
-                            #log.info("connect received")
                             arg = words[1]
                             controller.send("Connected " + arg)
                         elif cmd == 'showlist':
@@ -227,10 +194,8 @@ class MainProcess:
                                      len(self.savepoint_connections))
                             controller.send('ok')
                         elif cmd == 'activate':
-                            #log.info("ACTIVATE")
                             spid = int(words[1])
                             steps = int(words[2])
-                            #log.info("activate %d"%arg)
                             for s in self.savepoint_connections:
                                 if s.id == spid:
                                     sp = s
@@ -242,7 +207,6 @@ class MainProcess:
                             
                     # New Savepoint/Debuggee Connection
                     elif fd == sp_sock.fileno():
-                        #log.info('new connection')
                         conn, addr = sp_sock.accept()
                         msging = Messaging(conn)
                         msg = msging.recv().split()
@@ -259,7 +223,6 @@ class MainProcess:
                             self.savepoint_connections.append(sp)
                             msging.send('ok {0}'.format(max_id))
                             max_id += 1
-                            #log.info('savepoint added')
                             if self.do_quit:
                                 sp.quit()
                         else:
@@ -270,25 +233,22 @@ class MainProcess:
                                 conn.respond()
                                 break
                         else:
-                            #log.info("Additionally got: %s" % got)
                             log.info('Unknown fd: %s' % fd)
                             os.unlink(SOCK_NAME)
                             sys.exit(0)
         else:
-            #dbg.connect()
             dbg.timelines = shareddict.TimelinesProxy()
             dbg.current_timeline = dbg.timelines.new_timeline()
             name = dbg.current_timeline.get_name() 
             dbg.timelines.set_current_timeline(name)
             dbg.sde = dbg.current_timeline.get_sde()
-            #dbg.sde = shareddict.DictProxy('sde')
     
-    def list_savepoints(self):  # TODO rename to snapshot
+    def list_snapshots(self):  # TODO rename to snapshot
         """Tell the controller to list all snapshots."""
-        log.debug("Send List Savepoints")
+        #log.debug("Send List Savepoints")
         self.debuggee.send('showlist')
         reply = self.debuggee.recv()
-        log.debug('reply received')
+        #log.debug('reply received')
         if reply != 'ok':
             raise Exception()
     

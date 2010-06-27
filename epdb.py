@@ -17,10 +17,6 @@ import configparser
 import shareddict
 from debug import debug
 
-#dbgpath = '/home/patrick/myprogs/epdb/dbgmods'
-#sys.path.append(dbgpath)
-#sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
-
 dbgpath = None
 
 def readconfig():
@@ -50,42 +46,17 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 mode = 'normal'
 
 def __import__(*args):
-    #debug("myimport", args[0], sys.path)
-    #debug('My import', args[0], args[3], args[4], sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
         return __pythonimport__(*args)
     else:
-        #debug("Importing", os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
-        #debug("ic: ", dbg.ic)
         pass
     new = True
     if args[0] in dbg.modules:
         new = False
     mod = __pythonimport__(*args)
-    #try:
-    #    getattr(mod, 'print')
-    #    debug('Found')
-    #except:
-    #    pass
     
     if new:
         dbg.modules.append(args[0])
-        #debug('new found', args[0], dbg.modules)
-        #if args[0] == 'random':
-        #    debug('Importing random')
-        #    #debug(mod.__dict__)
-        #    #debug(getattr(mod, 'randint'))
-        #    randmod = __pythonimport__('__random', globals(), locals(), [])
-        #    for key in randmod.__dict__.keys():
-        #        if key == 'random':
-        #            continue
-        #        if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-        #            continue
-        #        setattr(mod, '__orig__'+key, getattr(mod,key))
-        #        setattr(mod, key, getattr(randmod, key))
-        #        debug('Patched: ', key)
-        #    #print(mod.__dict__.keys())
-        #    #setattr(mod, 'randint', randint)
         if args[0][:2] != '__':
             try:
                 module = __pythonimport__('__'+args[0], globals(), locals(), [])
@@ -107,10 +78,6 @@ def __import__(*args):
                         setattr(mod, key, getattr(module, key))
                     except AttributeError:
                         pass
-                
-        #elif args[0] == 'builtins':
-        #    debug('Print found')
-            #setattr(mod, 'print', myprint)
     return mod
 
 class side_effects:
@@ -124,14 +91,6 @@ class side_effects:
         newfunc.__debug__ = True
         return newfunc
     __call__.__debug__ = True
-
-
-def nothing(*args, **kargs):
-    return
-
-#@side_effects(undo=nothing, replay=nothing)
-#def println(*args, **kargs):
-#    debug(*args, **kargs)
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -154,16 +113,12 @@ class Epdb(pdb.Pdb):
     
     def is_skipped_module(self, module_name):
         """Extend to skip all modules that start with double underscore"""
-        #debug('Check ', module_name)
         base = pdb.Pdb.is_skipped_module(self, module_name)
         if base == True:
-            #debug("return True")
             return True
         
         if module_name == '__main__':
-            #debug("return False")
             return False
-        #debug("return", module_name.startswith('__'))
         return module_name.startswith('__')
     
     def findsnapshot(self, ic):
@@ -200,26 +155,18 @@ class Epdb(pdb.Pdb):
         self.snapshots[snapshotdata.id] = snapshotdata
         
         dbg.current_timeline.add(snapshotdata.id)
-        # debug("step_forward: {0}".format(snapshot.step_forward))
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
-            #debug ('mode replay')
-            #debug('step forward: ', snapshot.step_forward, 'instructions')
             self.stopafter = snapshot.step_forward + 1
-            #debug('Initial stopafter: ', self.stopafter, 'instructions')
-            #self.set_continue()
             return 1
         else:
             return
     
-    def precmd(self, line):
-        #debug("precommand")
-        return line
+    #def precmd(self, line):
+    #    #debug("precommand")
+    #    return line
 
     def preloop(self):
-        #    dbg.ic = 0
-        #    self.make_snapshot()
-        #    debug('snapshot made')
         debug("ic: ", dbg.ic)
     
     def _runscript(self, filename):
@@ -249,7 +196,6 @@ class Epdb(pdb.Pdb):
         sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
 
         with open(filename, "rb") as fp:
-            #debug(fp.read)
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
         builtins.__import__ = __import__            
@@ -299,12 +245,11 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        #debug('Line is going to be dispatched: ', frame.f_code.co_filename, frame.f_lineno, dbg.ic)
         debug("dispatch stopafter: ", self.stopafter)
         lineno = frame.f_lineno     # TODO extend with filename so to support different files
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
-        ##debug('Save tuple ',(filename, lineno))
+        
         try:
             self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
         except:
@@ -322,27 +267,18 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         else:
             if self._wait_for_mainpyfile:
-                #debug('_wait_for_mainpyfile')
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
-                    #debug('Not found')
                     return
-                #debug('Found', self.stopafter)
                 self.make_snapshot()
                 self._wait_for_mainpyfile = 0
-                #self.skip.add("__main__")
             else:
                 dbg.ic += 1
             
-            #debug("!!!!!!!!!!")
             if self.starting_ic is None:
                 if frame.f_code.co_filename == self.mainpyfile:
-                    #self.starting_ic = self.ic
                     self.starting_ic = dbg.ic
                     debug("starting ic: ", self.starting_ic)
-                #debug(frame.f_code.co_filename, self.mainpyfile)
-            # debug('Line is going to be dispatched: ', self.ic)
             
-            #debug('stopafter: ', self.stopafter)
             if self.stopafter > 0:
                 debug('stopafter > 0', self.stopafter)
                 self.stopafter -= 1
@@ -359,11 +295,9 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         
     def user_call(self, frame, argument_list):
-        #debug('User call: ', frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno, dbg.ic)
         
         self.call_stack.append(dbg.ic)
         
-        #raise EpdbExit()
         if dbg.mode == 'replay':
             pass
         elif self.running_mode == 'continue':
@@ -374,91 +308,71 @@ class Epdb(pdb.Pdb):
             pass
         else:
             if self._wait_for_mainpyfile:
-                #debug("User call waiting for mainpyfile")
                 return
-            #if self.stop_here(frame):
-            #    debug('--Call--')
             debug('Calling interaction', self.running_mode)
             self.interaction(frame, None)
     
     def stop_here(self, frame):
-        #debug('Stop here')
         if pdb.Pdb.stop_here(self, frame):
-            #debug('stop found')
             return True
         return False
-    
-    #def break_here(self, frame):
-    #    #debug('Break here')
-    #    if pdb.Pdb.break_here(self, frame):
-    #        #debug('Breakpoint found')
-    #        return True
-    #    return False
 
     def set_continue(self):
         # Debugger overhead needed to count instructions
-        #self._set_stopinfo(None, None)
         self.set_step()
         self.running_mode = 'continue'
 
     def do_snapshot(self, arg, temporary=0):
-        #global mode
-        #snapshot = snapshotting.Snapshot(self.ic, self.snapshot_id)
+        """snapshot - makes a snapshot"""
         r = self.make_snapshot()
         if self.stopafter > 0:
             self.stopafter -= 1
         return r
     
     def do_restore(self, arg):
+        """Restore a previous Snapshot, e.g. restore 0"""
         try:
             id = int(arg)
         except:
              debug('You need to supply an index, e.g. restore 0')
              return
-        # debug('restore {0}'.format(arg))
         self.mp.activatesp(id)
-        # self.set_quit()
-        #debug('raise EpdbExit()')
         raise EpdbExit()
     
     def do_ude(self, arg):
+        """Shows the current ude. Debugging only."""
         debug('ude:', dbg.ude)
     
     def do_sde(self, arg):
+        """Shows the current sde. Debugging only."""
         debug('sde:', dbg.sde)
     
-    def do_epdbexit(self, arg):
-        raise EpdbExit()
-    
     def do_snapshots(self, arg):
-        """Snapshots lists all snapshots"""
-        print("id        ic")
-        print("------------")
+        """Lists all snapshots"""
+        debug("id        ic")
+        debug("------------")
         for k in self.snapshots.keys():
             e = self.snapshots[k]
             print(e.id, e.ic)
-        self.mp.list_savepoints()
-    
-    def do_stopafter(self, arg):
-        steps = int(arg)
-        self.stopafter = steps
-    
-    def do_init(self, arg):
-        self.init_reversible()
-    
+        self.mp.list_snapshots()
+
     def do_ic(self, arg):
+        """Shows the current instruction count"""
         debug('The instruction count is:', dbg.ic)
         
     def do_timelines(self, arg):
+        """List all timelines."""
         dbg.timelines.show()
     
     def do_switch_timeline(self, arg):
         """Switch to another timeline"""
-        #try:
-        timeline = dbg.timelines.get(arg)
-        #except:
-        #    debug("Timeline '",arg,"' dosn't exist", sep='')
-        #    return    
+        debug("Doesn't work yet")
+        return
+        try:
+            timeline = dbg.timelines.get(arg)
+        except:
+            debug("Timeline '",arg,"' dosn't exist", sep='')
+            return    
         dbg.current_timeline.deactivate(dbg.ic)
         dbg.ic = timeline.get_ic()
         dbg.sde = timeline.get_sde()
@@ -467,9 +381,11 @@ class Epdb(pdb.Pdb):
         snapshot = self.findsnapshot(dbg.ic)
         
     def do_current_timeline(self, arg):
+        """View the name of the current timeline"""
         dbg.current_timeline.show()
         
     def do_newtimeline(self, arg):
+        """Create a new timeline. This allows changing the program flow from the last run"""
         if arg.strip() == '':
             debug("You need to supply a name for the new timeline")
             return
@@ -487,12 +403,15 @@ class Epdb(pdb.Pdb):
         return 1
     
     def do_replay(self, arg):
+        """Debugging only. TODO remove if not needed anymore"""
         dbg.mode = 'replay'
     
     def do_mode(self, arg):
+        """Shows the current mode."""
         debug("mode: ", dbg.mode)
     
     def do_rstep(self, arg):
+        """Steps one step backwards"""
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -521,6 +440,7 @@ class Epdb(pdb.Pdb):
         raise EpdbExit()
         
     def do_rnext(self, arg):
+        """Reverse a next command."""
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -547,6 +467,7 @@ class Epdb(pdb.Pdb):
         raise EpdbExit()
         
     def do_rcontinue(self, arg):
+        """Continues in backward direction"""
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -557,11 +478,6 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
-                # TODO here is maybe a bug: rontinue_ln may has values higher than
-                # the current ic?
-                # Thought over it again it seems to be ok, as there cannot be any
-                # higher instruction counts
-                # Maybe it isn't necessary to have a stack of instruction counts
                 newmax = max(self.rcontinue_ln[bp][-1], highestic)
                 if newmax < dbg.ic:
                     highestic = newmax
@@ -591,7 +507,6 @@ class Epdb(pdb.Pdb):
         
     def set_next(self, frame):
         """Stop on the next line in or below the given frame."""
-        #self._set_stopinfo(None, None)
         self.set_step()
         self.running_mode = 'next'
         self.nocalls = 0 # Increased on call - decreased on return
@@ -603,8 +518,6 @@ class Epdb(pdb.Pdb):
     do_s = do_step # otherwise the pdb impl is called
         
     def set_quit(self):
-        # debug('quit set')
-        #self.mp.quit()
         pdb.Pdb.set_quit(self)
     
     def user_return(self, frame, return_value):
@@ -626,9 +539,6 @@ class Epdb(pdb.Pdb):
             frame.f_locals['__return__'] = return_value
             debug('--Return--')
             self.interaction(frame, None)
-    
-    def do_rnext_ic(self, arg):
-        debug(self.rnext_ic)
     
     # The following functions are the same as in bdp except for
     # The usage of the epdb Breakpoint implementation
@@ -1012,7 +922,3 @@ def main():
 if __name__ == '__main__':
     import epdb
     epdb.main()
-#else:
-#    debug("ELSEELSE")
-    #print('Loop finished')
-#print("Finished")
