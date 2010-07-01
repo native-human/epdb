@@ -189,7 +189,16 @@ class Epdb(pdb.Pdb):
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
         builtins.__import__ = __import__            
+        
         self.run(statement)
+        
+        dbg.ic += 1
+        if self._user_requested_quit:
+            return
+        debug("Program has finished")
+        debug("Going into post-mortem interaction mode", dbg.ic)
+        self.is_postmortem=True
+        self.cmdloop()
         
     def init_reversible(self):
         self.mp = snapshotting.MainProcess()
@@ -227,6 +236,8 @@ class Epdb(pdb.Pdb):
         
         # steps from last snapshot
         self.stepsfromlastss = None
+        
+        self.is_postmortem = False
         
         self.breaks = shareddict.DictProxy('breaks')
         self.snapshots = shareddict.DictProxy('snapshots')
@@ -533,12 +544,30 @@ class Epdb(pdb.Pdb):
         self.nocalls = 0 # Increased on call - decreased on return
         
     def do_step(self, arg):
+        if self.is_postmortem:
+            debug("You are at the end of the program. You cant go forward.")
+            return
         if not self.ron:
             return pdb.Pdb.do_step(self, arg)
         self.set_step()
         self.running_mode = 'step'
         return 1
     do_s = do_step # otherwise the pdb impl is called
+        
+
+    def do_next(self, arg):
+        if self.is_postmortem:
+            debug("You are at the end of the program. You cant go forward.")
+            return
+        return pdb.Pdb.do_next(self, arg)
+    do_n = do_next
+    
+    def do_continue(self, arg):
+        if self.is_postmortem:
+            debug("You are at the end of the program. You cant go forward.")
+            return
+        return pdb.Pdb.do_continue(self, arg)
+    do_c = do_continue
         
     def set_quit(self):
         pdb.Pdb.set_quit(self)
@@ -547,10 +576,12 @@ class Epdb(pdb.Pdb):
         """This function is called when a return trap is set here."""
         try:
             callic = self.call_stack.pop()
+            self.rnext_ic[dbg.ic + 1] = callic
         except:
-            #TODO this usually happens
-            debug("the program has finished")
-        self.rnext_ic[dbg.ic + 1] = callic
+            # TODO this usually happens when the program has finished
+            # or ron was set when there was something on the stack
+            # in this case epdb simply fall back to step backwards.
+            pass
         
         if  self.running_mode == 'continue':
             pass
@@ -899,10 +930,11 @@ def main():
             epdb._runscript(mainpyfile)
             if epdb._user_requested_quit:
                 break
+            break
             #print("The program finished and will be restarted")
-            print("The program has finished", dbg.ic)
-            raise EpdbPostMortem()
-            #epdb.interaction(None, None)
+            #print("The program has finished", dbg.ic)
+            #raise EpdbPostMortem()
+            ##epdb.interaction(None, None)
         except pdb.Restart:
             print("Restarting", mainpyfile, "with arguments:")
             print("\t" + " ".join(sys.argv[1:]))
@@ -929,6 +961,8 @@ def main():
             break
         except EpdbPostMortem:
             t = sys.exc_info()[2]
+            print("Traceback:", t)
+            traceback.print_tb(t)
             epdb.mp.quit()
             break
         except:
