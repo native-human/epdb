@@ -65,7 +65,7 @@ def __import__(*args):
                 pass
                 #debug("nosuccess", sys.path)
             else:
-                debug('Importing a module with patching', args[0])
+                #debug('Importing a module with patching', args[0])
                 for key in module.__dict__.keys():
                     if key == args[0]:
                         continue
@@ -79,18 +79,6 @@ def __import__(*args):
                     except AttributeError:
                         pass
     return mod
-
-class side_effects:
-    def __init__(self, replay, undo):
-        self.replay = replay
-        self.undo = undo
-    def __call__(self, func):
-        def newfunc(*args, **kargs):
-            f = {'replay':self.replay, 'undo':self.undo, 'normal':func}[mode]
-            return f(*args, **kargs)
-        newfunc.__debug__ = True
-        return newfunc
-    __call__.__debug__ = True
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -124,7 +112,7 @@ class Epdb(pdb.Pdb):
     def findsnapshot(self, ic):
         """Looks for a snpashot to use for stepping backwards.
         Returns snapshot data"""
-        debug("findsnapshot", ic)
+        #debug("findsnapshot", ic)
         bestic = -1
         bestsnapshot = None
         for k in self.snapshots.keys():
@@ -134,11 +122,13 @@ class Epdb(pdb.Pdb):
                 if e.ic > bestic:
                     bestic = e.ic
                     bestsnapshot = e
-                    debug("bestsnapshot found")
+                    #debug("bestsnapshot found")
                 else:
-                    debug("snapshot ic smaller than best ic")
+                    pass
+                    #debug("snapshot ic smaller than best ic")
             else:
-                debug("snapshot ic bigger than current ic")
+                pass
+                #debug("snapshot ic bigger than current ic")
         return bestsnapshot
                 
     def make_snapshot(self):
@@ -205,6 +195,8 @@ class Epdb(pdb.Pdb):
         self.mp = snapshotting.MainProcess()
         from breakpoint import Breakpoint
         #self.ic = 0             # Instruction Counter
+        self.ron = True
+        
         dbg.ic = 0
         
         self.starting_ic = None
@@ -245,7 +237,6 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        debug("dispatch stopafter: ", self.stopafter)
         lineno = frame.f_lineno     # TODO extend with filename so to support different files
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
@@ -280,13 +271,13 @@ class Epdb(pdb.Pdb):
                     debug("starting ic: ", self.starting_ic)
             
             if self.stopafter > 0:
-                debug('stopafter > 0', self.stopafter)
+                #debug('stopafter > 0', self.stopafter)
                 self.stopafter -= 1
             
             if self.stopafter == 0:
-                debug('stopafter == 0')
+                #debug('stopafter == 0')
                 self.stopafter = -1
-                debug(dbg.mode)
+                #debug(dbg.mode)
                 dbg.mode = 'normal'
                 self.set_trace()
             
@@ -318,6 +309,8 @@ class Epdb(pdb.Pdb):
         return False
 
     def set_continue(self):
+        if not self.ron:
+            return pdb.Pdb.set_continue(self)
         # Debugger overhead needed to count instructions
         self.set_step()
         self.running_mode = 'continue'
@@ -331,6 +324,7 @@ class Epdb(pdb.Pdb):
     
     def do_restore(self, arg):
         """Restore a previous Snapshot, e.g. restore 0"""
+        # TODO leave current timeline and go into roff mode
         try:
             id = int(arg)
         except:
@@ -409,9 +403,25 @@ class Epdb(pdb.Pdb):
     def do_mode(self, arg):
         """Shows the current mode."""
         debug("mode: ", dbg.mode)
+        
+    def do_ron(self, arg):
+        """Enables reverse debugging"""
+        # TODO create or activate a new timeline
+        self.ron = True
+    
+    def do_roff(self, arg):
+        """Disables reverse debugging"""
+        if self.ron:
+            self.ron = False
+            dbg.current_timeline.deactivate(dbg.ic)
     
     def do_rstep(self, arg):
         """Steps one step backwards"""
+        
+        if not self.ron:
+            debug("You are not in reversible mode. You can enable it with 'ron'.")
+            return
+        
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -441,6 +451,11 @@ class Epdb(pdb.Pdb):
         
     def do_rnext(self, arg):
         """Reverse a next command."""
+        
+        if not self.ron:
+            debug("You are not in reversible mode. You can enable it with 'ron'.")
+            return
+        
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -468,6 +483,10 @@ class Epdb(pdb.Pdb):
         
     def do_rcontinue(self, arg):
         """Continues in backward direction"""
+        if not self.ron:
+            debug("You are not in reversible mode. You can enable it with 'ron'.")
+            return
+            
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
@@ -507,11 +526,15 @@ class Epdb(pdb.Pdb):
         
     def set_next(self, frame):
         """Stop on the next line in or below the given frame."""
+        if not self.ron:
+            return pdb.Pdb.set_next(self, frame)
         self.set_step()
         self.running_mode = 'next'
         self.nocalls = 0 # Increased on call - decreased on return
         
     def do_step(self, arg):
+        if not self.ron:
+            return pdb.Pdb.do_step(self, arg)
         self.set_step()
         self.running_mode = 'step'
         return 1

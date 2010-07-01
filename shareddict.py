@@ -64,7 +64,7 @@ class ServerList(list):
         return self[:]
         
 class ServerTimeline:
-    def __init__(self, timelines, name="head", snapshots=[], sde=None, ic=0):
+    def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None, ic=0):
         self.snapshots = snapshots
         self.timelines = timelines
         self.name = name
@@ -73,10 +73,17 @@ class ServerTimeline:
         self.ic = 0
         if name in timelines.sde_dict.keys():
             raise Exception("Name already exist in sde")
+        if name in timelines.ude_dict.keys():
+            raise Exception("Name already exist in ude")
         if sde:
             timelines.sde_dict[name] = sde
         else:
             timelines.sde_dict[name] = ServerDict()
+            
+        if ude:
+            timelines.ude_dict[name] = ude
+        else:
+            timelines.ude_dict[name] = ServerDict()
     
     def _add_by_id(self, snapshotid):
         try:
@@ -105,8 +112,10 @@ class ServerTimeline:
         """Creates a copy of the timeline. name is the new name of the timeline
         ic the instruction count. ic is used to set the sde dictionary correctly"""
         oldsde = self.timelines.sde_dict[self.name].copy()
+        oldude = self.timelines.ude_dict[self.name].copy()
         sde = {k:oldsde[k] for k in oldsde if k < ic}
-        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde)
+        ude = {k:oldude[k] for k in oldude if k < ic}
+        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde, ude=ude)
         for k in self.snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
@@ -114,6 +123,9 @@ class ServerTimeline:
     
     def get_sde(self):
         return "sde." + self.name
+    
+    def get_ude(self):
+        return "ude." + self.name
     
     def get_name(self):
         return self.name
@@ -126,9 +138,10 @@ class ServerTimeline:
         return self.ic
 
 class ServerTimelines:
-    def __init__(self, snapshotdict, sde_dict):
+    def __init__(self, snapshotdict, sde_dict, ude_dict):
         self.snapshotdict = snapshotdict
         self.sde_dict = sde_dict
+        self.ude_dict = ude_dict
         self.timelines = {} # name:timeline
         self.current_timeline = None
     
@@ -147,7 +160,7 @@ class ServerTimelines:
         
     def set_current_timeline(self, name):
         """Sets the current timeline"""
-        if not name in self.timelines:
+        if not name is None and not name in self.timelines:
             raise Exception("Timeline does not exist")
         self.current_timeline = name
         
@@ -172,14 +185,15 @@ class ServerTimelines:
             debug(self.timelines[k].name)
             
 def server(dofork=False):
-    sde = ServerDict()
+    #sde = ServerDict()
     bplist = ServerDict()   # weird naming, but conforming to bdb
     bpbynumber = ServerList()
     bpbynumber.append(None)
     breaks = ServerDict()
     snapshots = ServerDict()
     sde_dict = {}
-    timelines = ServerTimelines(snapshots, sde_dict)
+    ude_dict = {}
+    timelines = ServerTimelines(snapshots, sde_dict, ude_dict)
     #current_timeline = ServerTimeline(snapshots, timelines)
     
     try:
@@ -209,9 +223,9 @@ def server(dofork=False):
                         bstream = conn.recv()
                         try:
                             objref,method,args,kargs = pickle.loads(bstream)
-                            if objref == 'sde':
-                                r = getattr(sde, method)(*args, **kargs)
-                            elif objref == 'bplist':
+                            #if objref == 'sde':
+                            #    r = getattr(sde, method)(*args, **kargs)
+                            if objref == 'bplist':
                                 r = getattr(bplist, method)(*args, **kargs)
                             elif objref == 'bpbynumber':
                                 r = getattr(bpbynumber, method)(*args, **kargs)
@@ -227,6 +241,9 @@ def server(dofork=False):
                             elif objref.startswith('sde.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(sde_dict[id], method)(*args, **kargs)
+                            elif objref.startswith('ude.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(ude_dict[id], method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
@@ -428,6 +445,11 @@ class TimelineProxy:
         
     def get_sde(self):
         objref = self._remote_invoke('get_sde',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def get_ude(self):
+        objref = self._remote_invoke('get_ude',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
     
