@@ -70,7 +70,8 @@ class ServerTimeline:
         self.name = name
         self.firstic = 0
         self.lastic = 0
-        self.ic = 0
+        self.ic = ic
+        self.max_ic = ic
         if name in timelines.sde_dict.keys():
             raise Exception("Name already exist in sde")
         if name in timelines.ude_dict.keys():
@@ -89,6 +90,7 @@ class ServerTimeline:
         try:
             self.timelines.snapshotdict[snapshotid].references += 1
             self.snapshots.append(snapshotid)
+            debug("Snapshot added to timeline!!!!!!")
         except:
             raise Exception("Snapshot doesn't exist " + str(snaphotid))
         
@@ -104,8 +106,9 @@ class ServerTimeline:
     
     def show(self):
         debug("Showing Timeline:", self.name)
+        debug("Snapshots: ")
         for e in self.snapshots:
-            debug(e)
+            debug(e, sep=',')
         debug('')
     
     def copy(self, name, ic):
@@ -133,9 +136,17 @@ class ServerTimeline:
     def deactivate(self, ic):
         """Deactivate timeline, saves the instruction count"""
         self.ic = ic
+        if ic > self.max_ic:
+            self.max_ic = ic
         
     def get_ic(self):
         return self.ic
+    
+    def get_max_ic(self):
+        return self.max_ic
+    
+    def set_max_ic(self, maxic):
+        self.max_ic = maxic
 
 class ServerTimelines:
     def __init__(self, snapshotdict, sde_dict, ude_dict):
@@ -458,6 +469,12 @@ class TimelineProxy:
         
     def get_ic(self):
         return self._remote_invoke('get_ic',(), {})
+        
+    def get_max_ic(self):
+        return self._remote_invoke('get_ic',(), {})
+        
+    def set_max_ic(self, maxic):
+        return self._remote_invoke('set_max_ic',(maxic,), {})
         
 
 class TimelinesProxy:

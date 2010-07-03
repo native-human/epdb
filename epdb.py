@@ -133,6 +133,7 @@ class Epdb(pdb.Pdb):
                 
     def make_snapshot(self):
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
+        debug("SNAPSHOT: ", snapshot)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
@@ -144,7 +145,8 @@ class Epdb(pdb.Pdb):
         snapshotdata = SnapshotData(id=self.snapshot_id, ic=dbg.ic)
         self.snapshots[snapshotdata.id] = snapshotdata
         
-        dbg.current_timeline.add(snapshotdata.id)
+        if not snapshot.activated:
+            dbg.current_timeline.add(snapshotdata.id)
         if snapshot.step_forward > 0:
             dbg.mode = 'replay'
             self.stopafter = snapshot.step_forward + 1
@@ -423,6 +425,8 @@ class Epdb(pdb.Pdb):
     def do_roff(self, arg):
         """Disables reverse debugging"""
         if self.ron:
+            if dbg.ic > dbg.max_ic:
+                dbg.max_ic = dbg.ic
             self.ron = False
             dbg.current_timeline.deactivate(dbg.ic)
     
@@ -432,6 +436,9 @@ class Epdb(pdb.Pdb):
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
+        
+        if dbg.ic > dbg.current_timeline.get_max_ic():
+            dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
@@ -462,10 +469,12 @@ class Epdb(pdb.Pdb):
         
     def do_rnext(self, arg):
         """Reverse a next command."""
-        
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
+        
+        if dbg.ic > dbg.current_timeline.get_max_ic():
+            dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
@@ -498,6 +507,8 @@ class Epdb(pdb.Pdb):
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
             
+        if dbg.ic > dbg.current_timeline.get_max_ic():
+            dbg.current_timeline.set_max_ic(dbg.ic)
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return

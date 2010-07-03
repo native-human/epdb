@@ -28,6 +28,7 @@ class ControllerExit(Exception):
 
 
 class Snapshot:
+    # activated ... if the snaphot was activated or not
     def __init__(self, ic, psnapshot):
         self.ic = ic
         self.psnapshot = psnapshot
@@ -49,6 +50,7 @@ class Snapshot:
         self.pid = pid
         if pid:
             # Parent
+            self.activated = True 
             self.cpids.append(pid)
             while True:
                 msg = msging.recv()
@@ -76,6 +78,7 @@ class Snapshot:
             dbg.current_timeline = dbg.timelines.get_current_timeline()
             dbg.sde = dbg.current_timeline.get_sde()
             self.step_forward = -1
+            self.activated = False
         
 class Messaging:
     """This is wrapper around sockets, which allow to send and receive fixed
@@ -193,10 +196,10 @@ class MainProcess:
                             log.debug('Number of snapshots: %d' %
                                      len(self.savepoint_connections))
                             controller.send('ok')
-                        elif cmd == 'activate':
+                        elif cmd == 'activate': # TODO rename sp (savepoint) to snapshot
                             spid = int(words[1])
                             steps = int(words[2])
-                            for s in self.savepoint_connections:
+                            for s in self.savepoint_connections: # TODO rename savepoint connection
                                 if s.id == spid:
                                     sp = s
                                     break
@@ -243,7 +246,7 @@ class MainProcess:
             dbg.timelines.set_current_timeline(name)
             dbg.sde = dbg.current_timeline.get_sde()
     
-    def list_snapshots(self):  # TODO rename to snapshot
+    def list_snapshots(self):
         """Tell the controller to list all snapshots."""
         #log.debug("Send List Savepoints")
         self.debuggee.send('showlist')
@@ -258,7 +261,7 @@ class MainProcess:
         except:
             log.debug("Warning shutting down of snapshot server failed")
         
-    def activatesp(self, id, steps=-1):
+    def activatesp(self, id, steps=-1): # TODO rename to snapshot
         #log.info('activate {0} {1}'.format(id,steps))
         # TODO send own process id to the parent to wait for it, before start continuing
         self.debuggee.send('activate {0} {1}'.format(id,steps))
