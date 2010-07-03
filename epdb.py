@@ -115,9 +115,12 @@ class Epdb(pdb.Pdb):
         #debug("findsnapshot", ic)
         bestic = -1
         bestsnapshot = None
-        for k in self.snapshots.keys():
-            e = self.snapshots[k]
-            debug("try snapshot: ",e.id,e.ic)
+        snapshots = dbg.current_timeline.get_snapshots()
+        #for k in self.snapshots.keys():
+        #    e = self.snapshots[k]
+        for sid in snapshots:
+            e = self.snapshots[sid]
+            #debug("try snapshot: ",e.id,e.ic)
             if e.ic <= ic:
                 if e.ic > bestic:
                     bestic = e.ic

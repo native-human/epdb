@@ -150,6 +150,9 @@ class ServerTimeline:
     def set_max_ic(self, maxic):
         debug("Server set maxic: ", maxic)
         self.max_ic = maxic
+    
+    def get_snapshots(self):
+        return self.snapshots
 
 class ServerTimelines:
     def __init__(self, snapshotdict, sde_dict, ude_dict):
@@ -478,6 +481,9 @@ class TimelineProxy:
         
     def set_max_ic(self, maxic):
         return self._remote_invoke('set_max_ic',(maxic,), {})
+        
+    def get_snapshots(self):
+        return self._remote_invoke('get_snapshots',(), {})
         
 
 class TimelinesProxy:

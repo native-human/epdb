@@ -15,11 +15,16 @@ def randint(a, b):
         dbg.sde[dbg.ic] = value
         log.debug('debugging randint')
         return value
+    def redo(a, b):
+        log.debug("redoing randint")
+        return dbg.sde[dbg.ic]
     log.debug('This is the modified randint', a, b)
     if dbg.mode == 'replay':
         return replay(a, b)
     elif dbg.mode == 'normal':
         return debug(a, b)
+    elif dbg.mode == 'redo':
+        return redo(a, b)
     elif dbg.mode == 'undo':
         return
    
