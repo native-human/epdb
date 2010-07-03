@@ -250,6 +250,10 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
+        def setmode():
+            if dbg.mode == 'redo':
+                if dbg.ic >= dbg.current_timeline.get_max_ic():
+                    dbg.mode = 'normal'
         lineno = frame.f_lineno     # TODO extend with filename so to support different files
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
@@ -262,12 +266,15 @@ class Epdb(pdb.Pdb):
         if self.running_mode == 'continue':
             dbg.ic += 1
             if self.break_here(frame):
+                setmode()
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
             dbg.ic += 1
             if self.nocalls <= 0:
+                setmode()
                 self.interaction(frame, None)
             if self.break_here(frame):
+                setmode()
                 self.interaction(frame, None)
         else:
             if self._wait_for_mainpyfile:
@@ -290,9 +297,14 @@ class Epdb(pdb.Pdb):
             if self.stopafter == 0:
                 #debug('stopafter == 0')
                 self.stopafter = -1
-                #debug(dbg.mode)
-                dbg.mode = 'normal'
+                if dbg.current_timeline.get_max_ic() > dbg.ic:
+                    dbg.mode = 'redo'
+                else:
+                    debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
+                    dbg.mode = 'normal'
                 self.set_trace()
+            else:
+                setmode()
             
             if self.bp_commands(frame) and self.stopafter == -1:
                 #debug("Interaction")
@@ -438,7 +450,9 @@ class Epdb(pdb.Pdb):
             return
         
         if dbg.ic > dbg.current_timeline.get_max_ic():
+            debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
+            debug("current maxic ", dbg.current_timeline.get_max_ic())
         
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
@@ -474,6 +488,7 @@ class Epdb(pdb.Pdb):
             return
         
         if dbg.ic > dbg.current_timeline.get_max_ic():
+            debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
@@ -509,6 +524,7 @@ class Epdb(pdb.Pdb):
             
         if dbg.ic > dbg.current_timeline.get_max_ic():
             dbg.current_timeline.set_max_ic(dbg.ic)
+            debug("Set max ic: ", dbg.ic)
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return

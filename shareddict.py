@@ -109,7 +109,8 @@ class ServerTimeline:
         debug("Snapshots: ")
         for e in self.snapshots:
             debug(e, sep=',')
-        debug('')
+        debug('----')
+        debug("maxic:", self.max_ic)
     
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
@@ -143,9 +144,11 @@ class ServerTimeline:
         return self.ic
     
     def get_max_ic(self):
+        debug("Server get maxic: ", self.max_ic)
         return self.max_ic
     
     def set_max_ic(self, maxic):
+        debug("Server set maxic: ", maxic)
         self.max_ic = maxic
 
 class ServerTimelines:
@@ -471,7 +474,7 @@ class TimelineProxy:
         return self._remote_invoke('get_ic',(), {})
         
     def get_max_ic(self):
-        return self._remote_invoke('get_ic',(), {})
+        return self._remote_invoke('get_max_ic',(), {})
         
     def set_max_ic(self, maxic):
         return self._remote_invoke('set_max_ic',(maxic,), {})
