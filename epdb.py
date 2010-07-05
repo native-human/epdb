@@ -232,11 +232,10 @@ class Epdb(pdb.Pdb):
         # This is used in user_return to find its corresponding call
         self.call_stack = []
         
-        # In rnext_ic the position for the rnext command to jump to is saved
-        # It is filled in user_return
         self.rnext_ic = {}
         
-        # In rcontinue_ln for every execute line number a list of instruction counts
+        # TODO put into the timeline
+        # In rcontinue_ln for every executed line number a list of instruction counts
         # that have executed them is saved. This is needed for reverse continue
         self.rcontinue_ln = {}
         
@@ -276,6 +275,7 @@ class Epdb(pdb.Pdb):
             dbg.ic += 1
             if self.nocalls <= 0:
                 setmode()
+                debug("Nocall interaction")
                 self.interaction(frame, None)
             if self.break_here(frame):
                 setmode()
@@ -308,15 +308,10 @@ class Epdb(pdb.Pdb):
                     dbg.mode = 'normal'
                 self.set_trace()
             else:
-                if dbg.current_timeline.get_max_ic() > dbg.ic:
-                    dbg.mode = 'redo'
-                else:
-                    debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
-                    dbg.mode = 'normal'
                 setmode()
             
             if self.bp_commands(frame) and self.stopafter == -1:
-                #debug("Interaction")
+                debug("Interaction")
                 self.interaction(frame, None)
         
     def user_call(self, frame, argument_list):
@@ -334,7 +329,7 @@ class Epdb(pdb.Pdb):
         else:
             if self._wait_for_mainpyfile:
                 return
-            debug('Calling interaction', self.running_mode)
+            debug('Calling interaction', self.running_mode, dbg.mode, self.stopafter)
             self.interaction(frame, None)
     
     def stop_here(self, frame):
@@ -492,6 +487,7 @@ class Epdb(pdb.Pdb):
         
     def do_rnext(self, arg):
         """Reverse a next command."""
+        debug(dbg.current_timeline.get_rnext())
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
@@ -505,6 +501,9 @@ class Epdb(pdb.Pdb):
             return
         
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        debug('old nextic', nextic)
+        nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
+        debug('new nextic', nextic)
         
         s = self.findsnapshot(nextic)
         if s == None:
@@ -630,13 +629,17 @@ class Epdb(pdb.Pdb):
         try:
             callic = self.call_stack.pop()
             self.rnext_ic[dbg.ic + 1] = callic
+            dbg.current_timeline.get_rnext()[dbg.ic + 1] = callic
         except:
+
             # TODO this usually happens when the program has finished
             # or ron was set when there was something on the stack
             # in this case epdb simply fall back to step backwards.
             pass
-        
-        if  self.running_mode == 'continue':
+
+        if dbg.mode == 'replay':
+            pass
+        elif  self.running_mode == 'continue':
             pass
         elif  self.running_mode == 'next':
             self.nocalls -= 1

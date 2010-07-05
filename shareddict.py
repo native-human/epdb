@@ -64,7 +64,8 @@ class ServerList(list):
         return self[:]
         
 class ServerTimeline:
-    def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None, ic=0):
+    def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None,
+                 ic=0, rnext=None, rcontinue=None):
         self.snapshots = snapshots
         self.timelines = timelines
         self.name = name
@@ -85,6 +86,16 @@ class ServerTimeline:
             timelines.ude_dict[name] = ude
         else:
             timelines.ude_dict[name] = ServerDict()
+            
+        if rnext:
+            timelines.rnext_dict[name] = rnext
+        else:
+            timelines.rnext_dict[name] = ServerDict()
+        
+        if rcontinue:
+            timelines.rcontinue_dict[name] = rcontinue
+        else:
+            timelines.rcontinue_dict[name] = ServerDict()
     
     def _add_by_id(self, snapshotid):
         try:
@@ -131,6 +142,12 @@ class ServerTimeline:
     def get_ude(self):
         return "ude." + self.name
     
+    def get_rnext(self):
+        return "rnext." + self.name
+    
+    def get_rcontinue(self):
+        return "rcontinue." + self.name
+    
     def get_name(self):
         return self.name
     
@@ -155,10 +172,12 @@ class ServerTimeline:
         return self.snapshots
 
 class ServerTimelines:
-    def __init__(self, snapshotdict, sde_dict, ude_dict):
+    def __init__(self, snapshotdict, sde_dict, ude_dict, rnext_dict, rcontinue_dict):
         self.snapshotdict = snapshotdict
         self.sde_dict = sde_dict
         self.ude_dict = ude_dict
+        self.rnext_dict = rnext_dict
+        self.rcontinue_dict = rcontinue_dict
         self.timelines = {} # name:timeline
         self.current_timeline = None
     
@@ -210,7 +229,12 @@ def server(dofork=False):
     snapshots = ServerDict()
     sde_dict = {}
     ude_dict = {}
-    timelines = ServerTimelines(snapshots, sde_dict, ude_dict)
+    
+    # In rnext the position for the rnext command to jump to is saved
+    # It is filled in user_return
+    rnext_dict = {}
+    rcontinue_dict = {}
+    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, rnext_dict, rcontinue_dict)
     #current_timeline = ServerTimeline(snapshots, timelines)
     
     try:
@@ -261,6 +285,12 @@ def server(dofork=False):
                             elif objref.startswith('ude.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(ude_dict[id], method)(*args, **kargs)
+                            elif objref.startswith('rnext.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(rnext_dict[id], method)(*args, **kargs)
+                            elif objref.startswith('rcontinue.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(rcontinue_dict[id], method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
@@ -354,6 +384,9 @@ class DictProxy:
         
     def values(self): # TODO this doesn't work
         return self._remote_invoke('values',(), {})
+    
+    def get(self, k, d=None): # TODO this doesn't work
+        return self._remote_invoke('get',(k, d), {})
         
     def __len__(self):
         return self._remote_invoke('__len__',(), {})
@@ -467,6 +500,16 @@ class TimelineProxy:
     
     def get_ude(self):
         objref = self._remote_invoke('get_ude',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def get_rnext(self):
+        objref = self._remote_invoke('get_rnext',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def get_rcontinue(self):
+        objref = self._remote_invoke('get_rcontinue',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
     
