@@ -233,6 +233,8 @@ def server(dofork=False):
     # In rnext the position for the rnext command to jump to is saved
     # It is filled in user_return
     rnext_dict = {}
+    # In rcontinue for every executed line number a list of instruction counts
+    # that have executed them is saved. This is needed for reverse continue
     rcontinue_dict = {}
     timelines = ServerTimelines(snapshots, sde_dict, ude_dict, rnext_dict, rcontinue_dict)
     #current_timeline = ServerTimeline(snapshots, timelines)

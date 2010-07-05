@@ -232,12 +232,8 @@ class Epdb(pdb.Pdb):
         # This is used in user_return to find its corresponding call
         self.call_stack = []
         
-        self.rnext_ic = {}
-        
-        # TODO put into the timeline
-        # In rcontinue_ln for every executed line number a list of instruction counts
-        # that have executed them is saved. This is needed for reverse continue
-        self.rcontinue_ln = {}
+        #self.rnext_ic = {}    
+        #self.rcontinue_ln = {}
         
         # steps from last snapshot
         self.stepsfromlastss = None
@@ -261,10 +257,14 @@ class Epdb(pdb.Pdb):
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
         
-        try:
-            self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
-        except:
-            self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
+        rcontinue = dbg.current_timeline.get_rcontinue()
+        visits = rcontinue.get((filename,lineno), [])
+        visits.append(dbg.ic+1)
+        rcontinue[(filename,lineno)] = visits
+        #try:
+        #    self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
+        #except:
+        #    self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
         
         if self.running_mode == 'continue':
             dbg.ic += 1
@@ -500,10 +500,10 @@ class Epdb(pdb.Pdb):
             debug("At the beginning of the program. Can't step back")
             return
         
-        nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
-        debug('old nextic', nextic)
+        #nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        #debug('old nextic', nextic)
         nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
-        debug('new nextic', nextic)
+        #debug('new nextic', nextic)
         
         s = self.findsnapshot(nextic)
         if s == None:
@@ -543,7 +543,8 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
-                newmax = max(self.rcontinue_ln[bp][-1], highestic)
+                #newmax = max(self.rcontinue_ln[bp][-1], highestic)
+                newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
                 if newmax < dbg.ic:
                     highestic = newmax
             except KeyError:
@@ -628,7 +629,7 @@ class Epdb(pdb.Pdb):
         """This function is called when a return trap is set here."""
         try:
             callic = self.call_stack.pop()
-            self.rnext_ic[dbg.ic + 1] = callic
+            #self.rnext_ic[dbg.ic + 1] = callic
             dbg.current_timeline.get_rnext()[dbg.ic + 1] = callic
         except:
 
