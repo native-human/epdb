@@ -135,6 +135,7 @@ class Epdb(pdb.Pdb):
         return bestsnapshot
                 
     def make_snapshot(self):
+        # TODO make snapshot in roff and ron mode
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         debug("SNAPSHOT: ", snapshot)
         self.psnapshot = self.snapshot
@@ -298,7 +299,7 @@ class Epdb(pdb.Pdb):
                 self.stopafter -= 1
             
             if self.stopafter == 0:
-                #debug('stopafter == 0')
+                debug('stopafter == 0')
                 self.stopafter = -1
                 if dbg.current_timeline.get_max_ic() > dbg.ic:
                     dbg.mode = 'redo'
@@ -307,6 +308,11 @@ class Epdb(pdb.Pdb):
                     dbg.mode = 'normal'
                 self.set_trace()
             else:
+                if dbg.current_timeline.get_max_ic() > dbg.ic:
+                    dbg.mode = 'redo'
+                else:
+                    debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
+                    dbg.mode = 'normal'
                 setmode()
             
             if self.bp_commands(frame) and self.stopafter == -1:
@@ -579,9 +585,26 @@ class Epdb(pdb.Pdb):
             return
         if not self.ron:
             return pdb.Pdb.do_step(self, arg)
-        self.set_step()
-        self.running_mode = 'step'
-        return 1
+        debug("Stepping in mode: ", dbg.mode)
+        if dbg.mode == 'redo':
+            debug("Stepping in redo mode")
+            s = self.findsnapshot(dbg.ic+1)
+            if s == None:
+                debug("No snapshot made. Can't step back")
+                return
+            if s.ic <= dbg.ic:
+                debug("No snapshot found to step forward to. Step forward normal way", dbg.ic, s.ic)
+                self.set_step()
+                self.running_mode = 'step'
+                return 1
+            else:
+                debug('snapshot activation', s.id, 0)
+                self.mp.activatesp(s.id, 0)
+                raise EpdbExit()
+        else:
+            self.set_step()
+            self.running_mode = 'step'
+            return 1
     do_s = do_step # otherwise the pdb impl is called
         
 
