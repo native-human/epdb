@@ -152,11 +152,19 @@ class Epdb(pdb.Pdb):
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
         if snapshot.activation_type == "step_forward":
+            debug("step forward activation", snapshot.step_forward)
+            self.stopnocalls = None
+            self.running_mode = "stopafter"
             if snapshot.step_forward > 0:
                 dbg.mode = 'replay'
                 self.stopafter = snapshot.step_forward + 1
                 return 1
             else:
+                if dbg.ic == dbg.current_timeline.get_max_ic():
+                    dbg.mode = 'normal'
+                else:
+                    dbg.mode = 'redo'
+                debug("SET MODE TO: ", dbg.mode)
                 return
         elif snapshot.activation_type == "stopatnocalls":
             "TODO"
@@ -164,6 +172,11 @@ class Epdb(pdb.Pdb):
             self.set_next(self.curframe)
             self.stopnocalls = snapshot.nocalls
             self.running_mode = 'next'
+            return 1
+        elif snapshot.activation_type == "continue":
+            debug("Continue activation")
+            self.set_continue()
+            self.running_mode = 'continue'
             return 1
         else:
             debug("Unknown activation type", snapshot.activation_type)
@@ -262,6 +275,7 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
+        debug("user_line")
         def setmode():
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
@@ -279,14 +293,23 @@ class Epdb(pdb.Pdb):
         except:
             self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
         
+        if dbg.mode == 'normal':
+            continued = dbg.current_timeline.get_continue()
+            try:
+                continued[(filename,lineno)].append(dbg.ic+1)
+            except:
+                continued[(filename, lineno)] = [dbg.ic + 1]
+        
         if self.running_mode == 'continue':
+            debug("running mode continue")
             dbg.ic += 1
             if self.break_here(frame):
                 setmode()
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
+            debug("running mode next")
             dbg.ic += 1
-            if self.nocalls <= self.stopnocalls:
+            if self.stopnocalls and self.nocalls <= self.stopnocalls:
                 setmode()
                 debug("Nocall interaction")
                 self.interaction(frame, None)
@@ -295,6 +318,7 @@ class Epdb(pdb.Pdb):
                 setmode()
                 self.interaction(frame, None)
         else:
+            debug("running mode else")
             if self._wait_for_mainpyfile:
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
                     return
@@ -327,6 +351,8 @@ class Epdb(pdb.Pdb):
             if self.bp_commands(frame) and self.stopafter == -1:
                 debug("Interaction")
                 self.interaction(frame, None)
+            else:
+                debug("No interaction", self.stopafter)
         
     def user_call(self, frame, argument_list):
         
@@ -694,12 +720,36 @@ class Epdb(pdb.Pdb):
             return
         if dbg.mode == 'redo':
             debug("Continue in redo mode")
-            continued = dbg.current_timeline.get_next()
-            continueic = continued.get(dbg.ic, None)
-            if continueic:
-                pass
+            continued = dbg.current_timeline.get_continue()
+            
+            from breakpoint import Breakpoint
+            bestic = -1
+            for bp in Breakpoint.bplist:
+                debug("Checking Bp: ", bp)
+                try:
+                    bpic = continued[bp][-1]
+                    debug("Try bpic")
+                    if bpic <= dbg.ic:
+                        continue
+                    if bestic == -1:
+                        bestic = bpic
+                    else:
+                        bestic = min(bestic, bpic)
+                except KeyError:
+                    pass
+            
+            if bestic == -1:
+                debug("No future bp in executed instructions found")
+                # go to the highest snapshot and continue
+                s = self.findsnapshot(dbg.current_timeline.get_max_ic())
+                self.mp.activatecontinue(s.id)
+                raise EpdbExit()
             else:
-                pass
+                debug("Breakpoint found", bestic)
+                # find snapshot and continue
+                s = self.findsnapshot(bestic)
+                self.mp.activatesp(s.id, bestic - s.ic)
+                raise EpdbExit()
         return pdb.Pdb.do_continue(self, arg)
     do_c = do_continue
         
@@ -744,6 +794,7 @@ class Epdb(pdb.Pdb):
         if not filename in self.breaks:
             return False
         lineno = frame.f_lineno
+        debug("break_here", filename)
         if not lineno in self.breaks[filename]:
             # The line itself has no breakpoint, but maybe the line is the
             # first line of a function with breakpoint set by function name.

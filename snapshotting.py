@@ -88,6 +88,17 @@ class Snapshot:
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
                         break
+                elif cmd == "runcontinue":
+                    # Run until a given nocalls is reached
+                    rpid = os.fork()
+                    if rpid:
+                        self.cpids.append(rpid)
+                    else:    
+                        #self.step_forward = steps
+                        self.activation_type = "continue"
+                        dbg.current_timeline = dbg.timelines.get_current_timeline()
+                        dbg.sde = dbg.current_timeline.get_sde()
+                        break
         else:
             dbg.current_timeline = dbg.timelines.get_current_timeline()
             dbg.sde = dbg.current_timeline.get_sde()
@@ -153,6 +164,9 @@ class SavepointConnection:
         
     def activatenext(self, nocalls):
         self.msging.send('runnext {0}'.format(nocalls))
+        
+    def activatecontinue(self):
+        self.msging.send('runcontinue')
     
     def quit(self):
         self.msging.send('close')
@@ -233,6 +247,15 @@ class MainProcess:
                                     break
                             ss = self.savepoint_connections[ssid]
                             ss.activatenext(nocalls)
+                            
+                        elif cmd == 'activatecontinue':
+                            ssid = int(words[1])
+                            for s in self.savepoint_connections: # TODO rename savepoint connection
+                                if s.id == ssid:
+                                    ss = s
+                                    break
+                            ss = self.savepoint_connections[ssid]
+                            ss.activatecontinue()
                         else:
                             log.debug(cmd)
                             
@@ -296,13 +319,13 @@ class MainProcess:
         self.debuggee.close()
         #sys.exit(0)
         
-    def activatenext(self, id, nocalls): # TODO rename to snapshot
-        #log.info('activate {0} {1}'.format(id,steps))
-        # TODO send own process id to the parent to wait for it, before start continuing
+    def activatenext(self, id, nocalls):
         self.debuggee.send('activatenext {0} {1}'.format(id,nocalls))
         self.debuggee.close()
-        #sys.exit(0)
-        
+
+    def activatecontinue(self, id):
+        self.debuggee.send('activatecontinue {0}'.format(id))
+        self.debuggee.close()        
 #tmp = MainProcess()
 # 
 #log.info("line1")
