@@ -69,8 +69,22 @@ class Snapshot:
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
-                    else:    
+                    else:
+                        self.activation_type = "step_forward"
                         self.step_forward = steps
+                        dbg.current_timeline = dbg.timelines.get_current_timeline()
+                        dbg.sde = dbg.current_timeline.get_sde()
+                        break
+                elif cmd == "runnext":
+                    # Run until a given nocalls is reached
+                    nocalls = int(args[1])
+                    rpid = os.fork()
+                    if rpid:
+                        self.cpids.append(rpid)
+                    else:    
+                        #self.step_forward = steps
+                        self.activation_type = "stopatnocalls"
+                        self.nocalls = nocalls
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
                         break
@@ -79,6 +93,7 @@ class Snapshot:
             dbg.sde = dbg.current_timeline.get_sde()
             self.step_forward = -1
             self.activated = False
+            self.activation_type = None
         
 class Messaging:
     """This is wrapper around sockets, which allow to send and receive fixed
@@ -135,6 +150,9 @@ class SavepointConnection:
     
     def activate(self, steps=-1):
         self.msging.send('run {0}'.format(steps))
+        
+    def activatenext(self, nocalls):
+        self.msging.send('runnext {0}'.format(nocalls))
     
     def quit(self):
         self.msging.send('close')
@@ -205,6 +223,16 @@ class MainProcess:
                                     break
                             sp = self.savepoint_connections[spid]
                             sp.activate(steps)
+                            
+                        elif cmd == 'activatenext':
+                            ssid = int(words[1])
+                            nocalls = int(words[2])
+                            for s in self.savepoint_connections: # TODO rename savepoint connection
+                                if s.id == ssid:
+                                    ss = s
+                                    break
+                            ss = self.savepoint_connections[ssid]
+                            ss.activatenext(nocalls)
                         else:
                             log.debug(cmd)
                             
@@ -265,6 +293,13 @@ class MainProcess:
         #log.info('activate {0} {1}'.format(id,steps))
         # TODO send own process id to the parent to wait for it, before start continuing
         self.debuggee.send('activate {0} {1}'.format(id,steps))
+        self.debuggee.close()
+        #sys.exit(0)
+        
+    def activatenext(self, id, nocalls): # TODO rename to snapshot
+        #log.info('activate {0} {1}'.format(id,steps))
+        # TODO send own process id to the parent to wait for it, before start continuing
+        self.debuggee.send('activatenext {0} {1}'.format(id,nocalls))
         self.debuggee.close()
         #sys.exit(0)
         

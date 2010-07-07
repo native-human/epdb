@@ -151,12 +151,22 @@ class Epdb(pdb.Pdb):
         
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
-        if snapshot.step_forward > 0:
-            dbg.mode = 'replay'
-            self.stopafter = snapshot.step_forward + 1
+        if snapshot.activation_type == "step_forward":
+            if snapshot.step_forward > 0:
+                dbg.mode = 'replay'
+                self.stopafter = snapshot.step_forward + 1
+                return 1
+            else:
+                return
+        elif snapshot.activation_type == "stopatnocalls":
+            "TODO"
+            debug("STOPATNOCALLS", snapshot.nocalls)
+            self.set_next(self.curframe)
+            self.stopnocalls = snapshot.nocalls
+            self.running_mode = 'next'
             return 1
         else:
-            return
+            debug("Unknown activation type", snapshot.activation_type)
     
     #def precmd(self, line):
     #    #debug("precommand")
@@ -228,12 +238,15 @@ class Epdb(pdb.Pdb):
         self.running_mode = None
         self.stopafter = -1
         
+        self.stopnocalls = None
+        self.nocalls = 0
+        
         # The call_stack contains ic for every call in a previous frame
         # This is used in user_return to find its corresponding call
         self.call_stack = []
         
-        #self.rnext_ic = {}    
-        #self.rcontinue_ln = {}
+        self.rnext_ic = {}    
+        self.rcontinue_ln = {}
         
         # steps from last snapshot
         self.stepsfromlastss = None
@@ -257,14 +270,14 @@ class Epdb(pdb.Pdb):
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
         
-        rcontinue = dbg.current_timeline.get_rcontinue()
-        visits = rcontinue.get((filename,lineno), [])
-        visits.append(dbg.ic+1)
-        rcontinue[(filename,lineno)] = visits
-        #try:
-        #    self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
-        #except:
-        #    self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
+        #rcontinue = dbg.current_timeline.get_rcontinue()
+        #visits = rcontinue.get((filename,lineno), [])
+        #visits.append(dbg.ic+1)
+        #rcontinue[(filename,lineno)] = visits
+        try:
+            self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
+        except:
+            self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
         
         if self.running_mode == 'continue':
             dbg.ic += 1
@@ -273,11 +286,12 @@ class Epdb(pdb.Pdb):
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
             dbg.ic += 1
-            if self.nocalls <= 0:
+            if self.nocalls <= self.stopnocalls:
                 setmode()
                 debug("Nocall interaction")
                 self.interaction(frame, None)
             if self.break_here(frame):
+                self.stopnocalls = None
                 setmode()
                 self.interaction(frame, None)
         else:
@@ -317,13 +331,17 @@ class Epdb(pdb.Pdb):
     def user_call(self, frame, argument_list):
         
         self.call_stack.append(dbg.ic)
-        
+        nextd = dbg.current_timeline.get_next()
+        self.nocalls += 1
+        if not dbg.ic in nextd:
+            nextd[dbg.ic] = None
         if dbg.mode == 'replay':
             pass
         elif self.running_mode == 'continue':
             pass
         elif self.running_mode == 'next':
-            self.nocalls += 1
+            #self.nocalls += 1
+            pass
         elif self.running_mode == 'step':
             pass
         else:
@@ -487,7 +505,7 @@ class Epdb(pdb.Pdb):
         
     def do_rnext(self, arg):
         """Reverse a next command."""
-        debug(dbg.current_timeline.get_rnext())
+        #debug(dbg.current_timeline.get_rnext())
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
@@ -500,9 +518,9 @@ class Epdb(pdb.Pdb):
             debug("At the beginning of the program. Can't step back")
             return
         
-        #nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
         #debug('old nextic', nextic)
-        nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
+        #nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
         #debug('new nextic', nextic)
         
         s = self.findsnapshot(nextic)
@@ -543,8 +561,8 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
-                #newmax = max(self.rcontinue_ln[bp][-1], highestic)
-                newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
+                newmax = max(self.rcontinue_ln[bp][-1], highestic)
+                #newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
                 if newmax < dbg.ic:
                     highestic = newmax
             except KeyError:
@@ -577,7 +595,8 @@ class Epdb(pdb.Pdb):
             return pdb.Pdb.set_next(self, frame)
         self.set_step()
         self.running_mode = 'next'
-        self.nocalls = 0 # Increased on call - decreased on return
+        #self.nocalls = 0 # Increased on call - decreased on return
+        self.stopnocalls = self.nocalls
         
     def do_step(self, arg):
         if self.is_postmortem:
@@ -612,13 +631,75 @@ class Epdb(pdb.Pdb):
         if self.is_postmortem:
             debug("You are at the end of the program. You cant go forward.")
             return
-        return pdb.Pdb.do_next(self, arg)
+        if dbg.mode == 'redo':
+            debug("Next in redo mode")
+            nextd = dbg.current_timeline.get_next()
+            #steps = nextd.get(dbg.ic, dbg.ic+1) - dbg-ic
+            nextic = nextd.get(dbg.ic, "empty")
+            
+            if nextic is None:
+                # The next command has to switch to normal mode at some point
+                # Use the highest available snapshot
+                debug("mode switch next")
+                #self.highestsnapshot() # TODO
+                s = self.findsnapshot(dbg.current_timeline.get_max_ic())
+                if s.ic <= dbg.ic:
+                    debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
+                    self.set_next(self.curframe)
+                    self.running_mode = 'next'
+                    return 1
+                else:
+                    debug('snapshot next activation', s.id, self.nocalls)
+                    self.mp.activatenext(s.id, self.nocalls)
+                    raise EpdbExit()
+            elif nextic == "empty":
+                # There is no function call in the current line -> same as stepping
+                debug('Stepping next')
+                s = self.findsnapshot(dbg.ic+1)
+                nextic = dbg.ic + 1
+            else:
+               # The next ends in the current timeline and no mode switch is needed.
+               debug('next inside timeline')
+               s = self.findsnapshot(nextic)
+               pass
+            
+            #s = self.findsnapshot(dbg.ic+1)
+            if s == None:
+                debug("No snapshot made. This shouldn't be")
+                return
+            if s.ic <= dbg.ic:
+                debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
+                self.set_next(self.curframe)
+                self.running_mode = 'next'
+                return 1
+            else:
+                debug('snapshot activation', s.id, s.ic - nextic)
+                self.mp.activatesp(s.id, s.ic - nextic)
+                raise EpdbExit()
+            #
+            #if dbg.ic in nextd:
+            #    steps = nextd.get()
+            #    debug("Jumping next", steps)
+            #else:
+            #    
+            #    debug("Stepping next", steps)
+            
+        else:
+            return pdb.Pdb.do_next(self, arg)
     do_n = do_next
     
     def do_continue(self, arg):
         if self.is_postmortem:
             debug("You are at the end of the program. You cant go forward.")
             return
+        if dbg.mode == 'redo':
+            debug("Continue in redo mode")
+            continued = dbg.current_timeline.get_next()
+            continueic = continued.get(dbg.ic, None)
+            if continueic:
+                pass
+            else:
+                pass
         return pdb.Pdb.do_continue(self, arg)
     do_c = do_continue
         
@@ -629,21 +710,25 @@ class Epdb(pdb.Pdb):
         """This function is called when a return trap is set here."""
         try:
             callic = self.call_stack.pop()
-            #self.rnext_ic[dbg.ic + 1] = callic
-            dbg.current_timeline.get_rnext()[dbg.ic + 1] = callic
+            self.rnext_ic[dbg.ic + 1] = callic
+            #dbg.current_timeline.get_rnext()[dbg.ic + 1] = callic
+            next_ic = dbg.current_timeline.get_next()
+            next_ic[callic] = dbg.ic + 1
         except:
-
+            debug("user_return exception")
             # TODO this usually happens when the program has finished
             # or ron was set when there was something on the stack
             # in this case epdb simply fall back to step backwards.
             pass
 
+        self.nocalls -= 1
         if dbg.mode == 'replay':
             pass
         elif  self.running_mode == 'continue':
             pass
         elif  self.running_mode == 'next':
-            self.nocalls -= 1
+            #self.nocalls -= 1
+            pass
         elif  self.running_mode == 'step':
             pass
         else:
