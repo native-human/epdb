@@ -96,11 +96,12 @@ class SnapshotData:
 
 class Epdb(pdb.Pdb):
     def __init__(self):
-        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle'])
+        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
         """Extend to skip all modules that start with double underscore"""
+        #debug("Check skipped", module_name)
         base = pdb.Pdb.is_skipped_module(self, module_name)
         if base == True:
             return True
@@ -133,7 +134,33 @@ class Epdb(pdb.Pdb):
                 pass
                 #debug("snapshot ic bigger than current ic")
         return bestsnapshot
-                
+        
+    def findnextbreakpointic(self):
+        """Looks for the next ic that has a breakpoint. It only looks at executed
+        instruction counts. Returns -1 if nothing was found"""
+        continued = dbg.current_timeline.get_continue()
+        from breakpoint import Breakpoint
+        bestic = -1
+        for bp in Breakpoint.bplist:
+            debug("Checking Bp: ", bp)
+            try:
+                idx = 0
+                for idx in range(len(continued[bp])):
+                    bpic = continued[bp][idx]
+                    idx += 1
+                    debug("Try bpic", bpic, idx, continued[bp])
+                    if bpic > dbg.ic:
+                        break
+                else:
+                    continue
+                if bestic == -1:
+                    bestic = bpic
+                else:
+                    bestic = min(bestic, bpic)
+            except KeyError:
+                pass
+        return bestic
+        
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
@@ -296,7 +323,9 @@ class Epdb(pdb.Pdb):
         if dbg.mode == 'normal':
             continued = dbg.current_timeline.get_continue()
             try:
-                continued[(filename,lineno)].append(dbg.ic+1)
+                l = continued[(filename,lineno)]
+                l.append(dbg.ic+1)
+                continued[(filename, lineno)] = l
             except:
                 continued[(filename, lineno)] = [dbg.ic + 1]
         
@@ -662,8 +691,14 @@ class Epdb(pdb.Pdb):
             nextd = dbg.current_timeline.get_next()
             #steps = nextd.get(dbg.ic, dbg.ic+1) - dbg-ic
             nextic = nextd.get(dbg.ic, "empty")
+            bpic = self.findnextbreakpointic()
             
-            if nextic is None:
+            if nextic == "empty":
+                # There is no function call in the current line -> same as stepping
+                debug('Stepping next')
+                s = self.findsnapshot(dbg.ic+1)
+                nextic = dbg.ic + 1
+            elif nextic is None and bpic == -1:
                 # The next command has to switch to normal mode at some point
                 # Use the highest available snapshot
                 debug("mode switch next")
@@ -678,16 +713,16 @@ class Epdb(pdb.Pdb):
                     debug('snapshot next activation', s.id, self.nocalls)
                     self.mp.activatenext(s.id, self.nocalls)
                     raise EpdbExit()
-            elif nextic == "empty":
-                # There is no function call in the current line -> same as stepping
-                debug('Stepping next')
-                s = self.findsnapshot(dbg.ic+1)
-                nextic = dbg.ic + 1
             else:
-               # The next ends in the current timeline and no mode switch is needed.
-               debug('next inside timeline')
-               s = self.findsnapshot(nextic)
-               pass
+                # The next ends in the current timeline and no mode switch is needed.
+                if nextic is None:
+                    nextic = bpic
+                elif bpic == -1:
+                    pass
+                else:
+                    nextic = min(nextic, bpic)
+                debug('next inside timeline')
+                s = self.findsnapshot(nextic)
             
             #s = self.findsnapshot(dbg.ic+1)
             if s == None:
@@ -701,15 +736,7 @@ class Epdb(pdb.Pdb):
             else:
                 debug('snapshot activation', s.id, s.ic - nextic)
                 self.mp.activatesp(s.id, s.ic - nextic)
-                raise EpdbExit()
-            #
-            #if dbg.ic in nextd:
-            #    steps = nextd.get()
-            #    debug("Jumping next", steps)
-            #else:
-            #    
-            #    debug("Stepping next", steps)
-            
+                raise EpdbExit()            
         else:
             return pdb.Pdb.do_next(self, arg)
     do_n = do_next
@@ -720,24 +747,7 @@ class Epdb(pdb.Pdb):
             return
         if dbg.mode == 'redo':
             debug("Continue in redo mode")
-            continued = dbg.current_timeline.get_continue()
-            
-            from breakpoint import Breakpoint
-            bestic = -1
-            for bp in Breakpoint.bplist:
-                debug("Checking Bp: ", bp)
-                try:
-                    bpic = continued[bp][-1]
-                    debug("Try bpic")
-                    if bpic <= dbg.ic:
-                        continue
-                    if bestic == -1:
-                        bestic = bpic
-                    else:
-                        bestic = min(bestic, bpic)
-                except KeyError:
-                    pass
-            
+            bestic = self.findnextbreakpointic()
             if bestic == -1:
                 debug("No future bp in executed instructions found")
                 # go to the highest snapshot and continue

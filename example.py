@@ -1,6 +1,8 @@
 import random
 
-print(random.randint(0,10))
+for i in range(3):
+    random.seed()
+    print(random.randint(0,10))
 
 def blah():
     print('blah')
