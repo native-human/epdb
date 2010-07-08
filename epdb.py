@@ -144,10 +144,10 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
-                idx = 0
-                for idx in range(len(continued[bp])):
-                    bpic = continued[bp][idx]
-                    debug("Try bpic", bpic, idx, continued[bp])
+                #idx = 0
+                for bpic in continued[bp]:
+                    #bpic = continued[bp][idx]
+                    debug("Try bpic", bpic)
                     if bpic > dbg.ic:
                         break
                 else:
@@ -308,7 +308,7 @@ class Epdb(pdb.Pdb):
         self.call_stack = []
         
         self.rnext_ic = {}    
-        self.rcontinue_ln = {}
+        #self.rcontinue_ln = {}
         
         # steps from last snapshot
         self.stepsfromlastss = None
@@ -337,10 +337,10 @@ class Epdb(pdb.Pdb):
         #visits = rcontinue.get((filename,lineno), [])
         #visits.append(dbg.ic+1)
         #rcontinue[(filename,lineno)] = visits
-        try:
-            self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
-        except:
-            self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
+        #try:
+        #    self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
+        #except:
+        #    self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
         
         if dbg.mode == 'normal':
             continued = dbg.current_timeline.get_continue()
@@ -632,18 +632,6 @@ class Epdb(pdb.Pdb):
             debug("At the beginning of the program. Can't step back")
             return
 
-        # Find the breakpoint with the highest ic
-        #from breakpoint import Breakpoint
-        #highestic = 0
-        #for bp in Breakpoint.bplist:
-        #    debug("Checking Bp: ", bp)
-        #    try:
-        #        newmax = max(self.rcontinue_ln[bp][-1], highestic)
-        #        #newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
-        #        if newmax < dbg.ic:
-        #            highestic = newmax
-        #    except KeyError:
-        #        pass
         highestic = self.findprecedingbreakpointic()
             
         debug("Highest ic found: ", highestic)
