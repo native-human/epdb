@@ -144,9 +144,7 @@ class Epdb(pdb.Pdb):
         for bp in Breakpoint.bplist:
             debug("Checking Bp: ", bp)
             try:
-                #idx = 0
                 for bpic in continued[bp]:
-                    #bpic = continued[bp][idx]
                     debug("Try bpic", bpic)
                     if bpic > dbg.ic:
                         break
@@ -596,6 +594,8 @@ class Epdb(pdb.Pdb):
             return
         
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
+        bpic = self.findprecedingbreakpointic()
+        nextic = max(nextic, bpic)
         #debug('old nextic', nextic)
         #nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
         #debug('new nextic', nextic)
