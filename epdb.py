@@ -147,7 +147,6 @@ class Epdb(pdb.Pdb):
                 idx = 0
                 for idx in range(len(continued[bp])):
                     bpic = continued[bp][idx]
-                    idx += 1
                     debug("Try bpic", bpic, idx, continued[bp])
                     if bpic > dbg.ic:
                         break
@@ -160,7 +159,30 @@ class Epdb(pdb.Pdb):
             except KeyError:
                 pass
         return bestic
-        
+    
+    def findprecedingbreakpointic(self):
+        """Looks for a preceding ic that has a breakpoint. It only looks at executed
+        instruction counts. Returns 0 if nothing was found"""
+        continued = dbg.current_timeline.get_continue()
+        from breakpoint import Breakpoint
+        bestic = 0
+        for bp in Breakpoint.bplist:
+            debug("Checking Bp: ", bp)
+            try:
+                for bpic in reversed(continued[bp]):
+                    debug("Try bpic")
+                    if bpic < dbg.ic:
+                        break
+                else:
+                    continue
+                if bestic == -1:
+                    bestic = bpic
+                else:
+                    bestic = max(bestic, bpic)
+            except KeyError:
+                pass
+        return bestic
+    
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
@@ -611,17 +633,18 @@ class Epdb(pdb.Pdb):
             return
 
         # Find the breakpoint with the highest ic
-        from breakpoint import Breakpoint
-        highestic = 0
-        for bp in Breakpoint.bplist:
-            debug("Checking Bp: ", bp)
-            try:
-                newmax = max(self.rcontinue_ln[bp][-1], highestic)
-                #newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
-                if newmax < dbg.ic:
-                    highestic = newmax
-            except KeyError:
-                pass
+        #from breakpoint import Breakpoint
+        #highestic = 0
+        #for bp in Breakpoint.bplist:
+        #    debug("Checking Bp: ", bp)
+        #    try:
+        #        newmax = max(self.rcontinue_ln[bp][-1], highestic)
+        #        #newmax = max(dbg.current_timeline.get_rcontinue()[bp][-1], highestic)
+        #        if newmax < dbg.ic:
+        #            highestic = newmax
+        #    except KeyError:
+        #        pass
+        highestic = self.findprecedingbreakpointic()
             
         debug("Highest ic found: ", highestic)
 
