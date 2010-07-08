@@ -482,19 +482,20 @@ class Epdb(pdb.Pdb):
     
     def do_switch_timeline(self, arg):
         """Switch to another timeline"""
-        debug("Doesn't work yet")
-        return
         try:
             timeline = dbg.timelines.get(arg)
         except:
             debug("Timeline '",arg,"' dosn't exist", sep='')
             return    
         dbg.current_timeline.deactivate(dbg.ic)
-        dbg.ic = timeline.get_ic()
-        dbg.sde = timeline.get_sde()
+        ic = timeline.get_ic()
+        #dbg.sde = timeline.get_sde()
         dbg.timelines.set_current_timeline(timeline.get_name())
+        debug("Switched to timeline ", timeline.get_name())
         dbg.current_timeline = timeline
-        snapshot = self.findsnapshot(dbg.ic)
+        s = self.findsnapshot(ic)
+        self.mp.activatesp(s.id, ic - s.ic)
+        raise EpdbExit()
         
     def do_current_timeline(self, arg):
         """View the name of the current timeline"""
