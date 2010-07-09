@@ -358,13 +358,15 @@ class Epdb(pdb.Pdb):
         elif self.running_mode == 'next':
             debug("running mode next")
             dbg.ic += 1
-            if self.stopnocalls and self.nocalls <= self.stopnocalls:
-                setmode()
-                debug("Nocall interaction")
-                self.interaction(frame, None)
             if self.break_here(frame):
                 self.stopnocalls = None
                 setmode()
+                debug("Breakpoint interaction")
+                self.interaction(frame, None)
+                debug("After interaction")
+            elif self.stopnocalls and self.nocalls <= self.stopnocalls:
+                setmode()
+                debug("Nocall interaction")
                 self.interaction(frame, None)
         else:
             debug("running mode else")
