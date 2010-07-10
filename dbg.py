@@ -6,6 +6,20 @@ import os
 
 #multiprocessing.util.log_to_stderr()
 
+class SnapshottingControl:
+    def __init__(self):
+        self._make_snapshot = False
+    def set_make_snapshot(self):
+        self._make_snapshot = True
+        
+    def get_make_snapshot(self):
+        return self._make_snapshot
+    
+    def clear_make_snapshot(self):
+        self._make_snapshot = False
+
+snapshottingcontrol = SnapshottingControl()
+
 timelines = None
 
 current_timeline = None
@@ -19,6 +33,10 @@ sde = {}
 
 # ude ... undo effects dictionary ic:effect effect is a function
 ude = {}
+
+# undod
+# Will be overwritten by an Proxy
+undod = {}
 
 #manager = None
 #server = None

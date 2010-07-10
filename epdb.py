@@ -96,7 +96,7 @@ class SnapshotData:
 
 class Epdb(pdb.Pdb):
     def __init__(self):
-        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os'])
+        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os', 'dbg'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -545,6 +545,12 @@ class Epdb(pdb.Pdb):
                 dbg.max_ic = dbg.ic
             self.ron = False
             dbg.current_timeline.deactivate(dbg.ic)
+    
+    def interaction(self, frame, traceback):
+        if dbg.snapshottingcontrol.get_make_snapshot():
+            self.make_snapshot()
+            dbg.snapshottingcontrol.clear_make_snapshot()
+        return pdb.Pdb.interaction(self, frame, traceback)
     
     def do_rstep(self, arg):
         """Steps one step backwards"""

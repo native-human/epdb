@@ -74,6 +74,7 @@ class Snapshot:
                         self.step_forward = steps
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.undod = dbg.current_timeline.get_ude()
                         break
                 elif cmd == "runnext":
                     # Run until a given nocalls is reached
@@ -87,6 +88,7 @@ class Snapshot:
                         self.nocalls = nocalls
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.undod = dbg.current_timeline.get_ude()
                         break
                 elif cmd == "runcontinue":
                     # Run until a given nocalls is reached
@@ -98,10 +100,12 @@ class Snapshot:
                         self.activation_type = "continue"
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
                         dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.undod = dbg.current_timeline.get_ude()
                         break
         else:
             dbg.current_timeline = dbg.timelines.get_current_timeline()
             dbg.sde = dbg.current_timeline.get_sde()
+            dbg.undod = dbg.current_timeline.get_ude()
             self.step_forward = -1
             self.activated = False
             self.activation_type = None
@@ -296,6 +300,7 @@ class MainProcess:
             name = dbg.current_timeline.get_name() 
             dbg.timelines.set_current_timeline(name)
             dbg.sde = dbg.current_timeline.get_sde()
+            dbg.undod = dbg.current_timeline.get_ude()
     
     def list_snapshots(self):
         """Tell the controller to list all snapshots."""
