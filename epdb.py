@@ -142,10 +142,10 @@ class Epdb(pdb.Pdb):
         from breakpoint import Breakpoint
         bestic = -1
         for bp in Breakpoint.bplist:
-            debug("Checking Bp: ", bp)
+            #debug("Checking Bp: ", bp)
             try:
                 for bpic in continued[bp]:
-                    debug("Try bpic", bpic)
+                    #debug("Try bpic", bpic)
                     if bpic > dbg.ic:
                         break
                 else:
@@ -165,10 +165,10 @@ class Epdb(pdb.Pdb):
         from breakpoint import Breakpoint
         bestic = 0
         for bp in Breakpoint.bplist:
-            debug("Checking Bp: ", bp)
+            #debug("Checking Bp: ", bp)
             try:
                 for bpic in reversed(continued[bp]):
-                    debug("Try bpic")
+                    #debug("Try bpic")
                     if bpic < dbg.ic:
                         break
                 else:
@@ -184,7 +184,7 @@ class Epdb(pdb.Pdb):
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
-        debug("SNAPSHOT: ", snapshot)
+        #debug("SNAPSHOT: ", snapshot)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
@@ -199,7 +199,7 @@ class Epdb(pdb.Pdb):
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
         if snapshot.activation_type == "step_forward":
-            debug("step forward activation", snapshot.step_forward)
+            #debug("step forward activation", snapshot.step_forward)
             self.stopnocalls = None
             self.running_mode = "stopafter"
             if snapshot.step_forward > 0:
@@ -211,22 +211,25 @@ class Epdb(pdb.Pdb):
                     dbg.mode = 'normal'
                 else:
                     dbg.mode = 'redo'
-                debug("SET MODE TO: ", dbg.mode)
+                #debug("SET MODE TO: ", dbg.mode)
                 return
         elif snapshot.activation_type == "stopatnocalls":
             "TODO"
             debug("STOPATNOCALLS", snapshot.nocalls)
             self.set_next(self.curframe)
+            #self.set_step()
             self.stopnocalls = snapshot.nocalls
             self.running_mode = 'next'
             return 1
         elif snapshot.activation_type == "continue":
-            debug("Continue activation")
+            #debug("Continue activation")
             self.set_continue()
+            #self.set_step()
             self.running_mode = 'continue'
             return 1
         else:
-            debug("Unknown activation type", snapshot.activation_type)
+            #debug("Unknown activation type", snapshot.activation_type)
+            pass
     
     #def precmd(self, line):
     #    #debug("precommand")
@@ -258,7 +261,7 @@ class Epdb(pdb.Pdb):
         self._user_requested_quit = 0
         globals = __main__.__dict__
         #locals = globals
-        debug("##################",dbgpath)
+        #debug("##################",dbgpath)
         sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
 
         with open(filename, "rb") as fp:
@@ -350,26 +353,26 @@ class Epdb(pdb.Pdb):
                 continued[(filename, lineno)] = [dbg.ic + 1]
         
         if self.running_mode == 'continue':
-            debug("running mode continue")
+            #debug("running mode continue")
             dbg.ic += 1
             if self.break_here(frame):
                 setmode()
                 self.interaction(frame, None)
         elif self.running_mode == 'next':
-            debug("running mode next")
+            #debug("running mode next")
             dbg.ic += 1
             if self.break_here(frame):
                 self.stopnocalls = None
                 setmode()
-                debug("Breakpoint interaction")
+                #debug("Breakpoint interaction")
                 self.interaction(frame, None)
-                debug("After interaction")
+                #debug("After interaction")
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 setmode()
-                debug("Nocall interaction")
+                #debug("Nocall interaction")
                 self.interaction(frame, None)
         else:
-            debug("running mode else")
+            #debug("running mode else")
             if self._wait_for_mainpyfile:
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
                     return
@@ -381,32 +384,33 @@ class Epdb(pdb.Pdb):
             if self.starting_ic is None:
                 if frame.f_code.co_filename == self.mainpyfile:
                     self.starting_ic = dbg.ic
-                    debug("starting ic: ", self.starting_ic)
+                    #debug("starting ic: ", self.starting_ic)
             
             if self.stopafter > 0:
                 #debug('stopafter > 0', self.stopafter)
                 self.stopafter -= 1
             
             if self.stopafter == 0:
-                debug('stopafter == 0')
+                #debug('stopafter == 0')
                 self.stopafter = -1
                 if dbg.current_timeline.get_max_ic() > dbg.ic:
                     dbg.mode = 'redo'
                 else:
-                    debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
+                    #debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
                     dbg.mode = 'normal'
                 self.set_trace()
             else:
                 setmode()
             
             if self.bp_commands(frame) and self.stopafter == -1:
-                debug("Interaction")
+                #debug("Interaction")
                 self.interaction(frame, None)
             else:
-                debug("No interaction", self.stopafter)
+                #debug("No interaction", self.stopafter)
+                pass
         
     def user_call(self, frame, argument_list):
-        
+        debug("user_call")
         self.call_stack.append(dbg.ic)
         nextd = dbg.current_timeline.get_next()
         self.nocalls += 1
@@ -424,7 +428,7 @@ class Epdb(pdb.Pdb):
         else:
             if self._wait_for_mainpyfile:
                 return
-            debug('Calling interaction', self.running_mode, dbg.mode, self.stopafter)
+            debug('Calling usercall interaction', self.running_mode, dbg.mode, self.stopafter)
             self.interaction(frame, None)
     
     def stop_here(self, frame):
@@ -550,9 +554,9 @@ class Epdb(pdb.Pdb):
             return
         
         if dbg.ic > dbg.current_timeline.get_max_ic():
-            debug("Set max ic: ", dbg.ic)
+            #debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
-            debug("current maxic ", dbg.current_timeline.get_max_ic())
+            #debug("current maxic ", dbg.current_timeline.get_max_ic())
         
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
@@ -577,7 +581,7 @@ class Epdb(pdb.Pdb):
             return
         
         steps = dbg.ic - s.ic - 1
-        debug('snapshot activation', s.id, steps)
+        #debug('snapshot activation', s.id, steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
@@ -589,7 +593,7 @@ class Epdb(pdb.Pdb):
             return
         
         if dbg.ic > dbg.current_timeline.get_max_ic():
-            debug("Set max ic: ", dbg.ic)
+            #debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
@@ -618,7 +622,7 @@ class Epdb(pdb.Pdb):
                 pass
         
         steps = nextic - s.ic
-        debug('snapshot activation', s.id, steps)
+        #debug('snapshot activation', s.id, steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
@@ -630,14 +634,14 @@ class Epdb(pdb.Pdb):
             
         if dbg.ic > dbg.current_timeline.get_max_ic():
             dbg.current_timeline.set_max_ic(dbg.ic)
-            debug("Set max ic: ", dbg.ic)
+            #debug("Set max ic: ", dbg.ic)
         if dbg.ic == 0:
             debug("At the beginning of the program. Can't step back")
             return
 
         highestic = self.findprecedingbreakpointic()
             
-        debug("Highest ic found: ", highestic)
+        #debug("Highest ic found: ", highestic)
 
         s = self.findsnapshot(highestic)
         if s == None:
@@ -646,7 +650,7 @@ class Epdb(pdb.Pdb):
 
         # Undo last steps
         for i in range(dbg.ic, highestic,-1):
-            debug("undo ic: ", i)
+            #debug("undo ic: ", i)
             try:
                 dbg.ude[dbg.ic - i - 1]()
                 del dbg.ude[dbg.ic - i -1]
@@ -654,7 +658,7 @@ class Epdb(pdb.Pdb):
                 pass
             
         steps = highestic - s.ic
-        debug('snapshot activation', s.id, steps)
+        #debug('snapshot activation', s.id, steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
@@ -666,6 +670,11 @@ class Epdb(pdb.Pdb):
         self.running_mode = 'next'
         #self.nocalls = 0 # Increased on call - decreased on return
         self.stopnocalls = self.nocalls
+    
+    def set_step(self):
+        """Stop on the next line in or below the given frame."""
+        self.stopnocalls = None
+        return pdb.Pdb.set_step(self)
         
     def do_step(self, arg):
         if self.is_postmortem:
@@ -673,9 +682,9 @@ class Epdb(pdb.Pdb):
             return
         if not self.ron:
             return pdb.Pdb.do_step(self, arg)
-        debug("Stepping in mode: ", dbg.mode)
+        #debug("Stepping in mode: ", dbg.mode)
         if dbg.mode == 'redo':
-            debug("Stepping in redo mode")
+            #debug("Stepping in redo mode")
             s = self.findsnapshot(dbg.ic+1)
             if s == None:
                 debug("No snapshot made. Can't step back")
@@ -686,7 +695,7 @@ class Epdb(pdb.Pdb):
                 self.running_mode = 'step'
                 return 1
             else:
-                debug('snapshot activation', s.id, 0)
+                #debug('snapshot activation', s.id, 0)
                 self.mp.activatesp(s.id, 0)
                 raise EpdbExit()
         else:
@@ -701,7 +710,7 @@ class Epdb(pdb.Pdb):
             debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
-            debug("Next in redo mode")
+            #debug("Next in redo mode")
             nextd = dbg.current_timeline.get_next()
             #steps = nextd.get(dbg.ic, dbg.ic+1) - dbg-ic
             nextic = nextd.get(dbg.ic, "empty")
@@ -709,22 +718,23 @@ class Epdb(pdb.Pdb):
             
             if nextic == "empty":
                 # There is no function call in the current line -> same as stepping
-                debug('Stepping next')
+                #debug('Stepping next')
                 s = self.findsnapshot(dbg.ic+1)
                 nextic = dbg.ic + 1
             elif nextic is None and bpic == -1:
                 # The next command has to switch to normal mode at some point
                 # Use the highest available snapshot
-                debug("mode switch next")
+                #debug("mode switch next")
                 #self.highestsnapshot() # TODO
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
                     debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                     self.set_next(self.curframe)
+                    #self.set_step()
                     self.running_mode = 'next'
                     return 1
                 else:
-                    debug('snapshot next activation', s.id, self.nocalls)
+                    #debug('snapshot next activation', s.id, self.nocalls)
                     self.mp.activatenext(s.id, self.nocalls)
                     raise EpdbExit()
             else:
@@ -735,7 +745,7 @@ class Epdb(pdb.Pdb):
                     pass
                 else:
                     nextic = min(nextic, bpic)
-                debug('next inside timeline')
+                #debug('next inside timeline')
                 s = self.findsnapshot(nextic)
             
             #s = self.findsnapshot(dbg.ic+1)
@@ -745,10 +755,11 @@ class Epdb(pdb.Pdb):
             if s.ic <= dbg.ic:
                 debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                 self.set_next(self.curframe)
+                #self.set_step()
                 self.running_mode = 'next'
                 return 1
             else:
-                debug('snapshot activation', s.id, s.ic - nextic)
+                #debug('snapshot activation', s.id, s.ic - nextic)
                 self.mp.activatesp(s.id, s.ic - nextic)
                 raise EpdbExit()            
         else:
@@ -760,16 +771,16 @@ class Epdb(pdb.Pdb):
             debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
-            debug("Continue in redo mode")
+            #debug("Continue in redo mode")
             bestic = self.findnextbreakpointic()
             if bestic == -1:
-                debug("No future bp in executed instructions found")
+                #debug("No future bp in executed instructions found")
                 # go to the highest snapshot and continue
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 self.mp.activatecontinue(s.id)
                 raise EpdbExit()
             else:
-                debug("Breakpoint found", bestic)
+                #debug("Breakpoint found", bestic)
                 # find snapshot and continue
                 s = self.findsnapshot(bestic)
                 self.mp.activatesp(s.id, bestic - s.ic)
@@ -818,7 +829,7 @@ class Epdb(pdb.Pdb):
         if not filename in self.breaks:
             return False
         lineno = frame.f_lineno
-        debug("break_here", filename)
+        #debug("break_here", filename)
         if not lineno in self.breaks[filename]:
             # The line itself has no breakpoint, but maybe the line is the
             # first line of a function with breakpoint set by function name.

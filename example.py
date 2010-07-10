@@ -1,6 +1,6 @@
 import random
 
-for i in range(3):
+for i in range(1):
     random.seed()
     print(random.randint(0,10))
 
