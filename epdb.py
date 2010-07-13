@@ -15,6 +15,7 @@ import types
 import _thread
 import configparser
 import shareddict
+import tempfile
 from debug import debug
 
 dbgpath = None
@@ -96,7 +97,7 @@ class SnapshotData:
 
 class Epdb(pdb.Pdb):
     def __init__(self):
-        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os', 'dbg'])
+        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale', 'codecs'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -199,12 +200,13 @@ class Epdb(pdb.Pdb):
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
         if snapshot.activation_type == "step_forward":
-            #debug("step forward activation", snapshot.step_forward)
+            debug("step forward activation", snapshot.step_forward)
             self.stopnocalls = None
             self.running_mode = "stopafter"
             if snapshot.step_forward > 0:
                 dbg.mode = 'replay'
                 self.stopafter = snapshot.step_forward + 1
+                debug("stopafter", self.stopafter)
                 return 1
             else:
                 if dbg.ic == dbg.current_timeline.get_max_ic():
@@ -228,7 +230,7 @@ class Epdb(pdb.Pdb):
             self.running_mode = 'continue'
             return 1
         else:
-            #debug("Unknown activation type", snapshot.activation_type)
+            debug("Unknown activation type", snapshot.activation_type)
             pass
     
     #def precmd(self, line):
@@ -280,6 +282,7 @@ class Epdb(pdb.Pdb):
         self.cmdloop()
         
     def init_reversible(self):
+        dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
         from breakpoint import Breakpoint
         #self.ic = 0             # Instruction Counter
@@ -325,7 +328,7 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        debug("user_line")
+        debug("user_line",frame.f_code.co_filename)
         def setmode():
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
@@ -377,6 +380,7 @@ class Epdb(pdb.Pdb):
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
                     return
                 self.make_snapshot()
+                debug('Main snapshot made or activated')
                 self._wait_for_mainpyfile = 0
             else:
                 dbg.ic += 1
@@ -410,7 +414,7 @@ class Epdb(pdb.Pdb):
                 pass
         
     def user_call(self, frame, argument_list):
-        debug("user_call")
+        #debug("user_call")
         self.call_stack.append(dbg.ic)
         nextd = dbg.current_timeline.get_next()
         self.nocalls += 1
@@ -548,8 +552,13 @@ class Epdb(pdb.Pdb):
     
     def interaction(self, frame, traceback):
         if dbg.snapshottingcontrol.get_make_snapshot():
-            self.make_snapshot()
+            r = self.make_snapshot()
+            debug('interaction snapshot made or activated')
             dbg.snapshottingcontrol.clear_make_snapshot()
+            if r:
+                if self.stopafter > 0:    # TODO this looks stupid
+                    self.stopafter -= 1
+                return
         return pdb.Pdb.interaction(self, frame, traceback)
     
     def do_rstep(self, arg):
@@ -587,7 +596,7 @@ class Epdb(pdb.Pdb):
             return
         
         steps = dbg.ic - s.ic - 1
-        #debug('snapshot activation', s.id, steps)
+        debug('snapshot activation', s.id, steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         

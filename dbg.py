@@ -6,6 +6,16 @@ import os
 
 #multiprocessing.util.log_to_stderr()
 
+#class IdGenerator:
+#    def __init__(self):
+#        self.id = 0
+#    def newid(self):
+#        r = self.id
+#        self.id += 1
+#        return r
+#    
+#idgenerator = IdGenerator()
+
 class SnapshottingControl:
     def __init__(self):
         self._make_snapshot = False
@@ -23,6 +33,9 @@ snapshottingcontrol = SnapshottingControl()
 timelines = None
 
 current_timeline = None
+
+# tempdir is the temporary file used by all the processes. tempdir is setted on startup.
+tempdir = None
 
 # mode can be of 'normal', 'replay', 'redo', 'undo'
 mode = 'normal'

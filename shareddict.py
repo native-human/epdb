@@ -9,6 +9,8 @@ import pickle
 import sys
 import collections
 import select
+import base64
+import re
 from debug import debug
     
 def connect(address):
@@ -66,7 +68,7 @@ class ServerList(list):
 class ServerTimeline:
     def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None,
                  ic=0,
-                 next=None, cont=None
+                 next=None, cont=None, resources=None,
                  #, rnext=None, rcontinue=None
                  ):
         self.snapshots = snapshots
@@ -109,6 +111,12 @@ class ServerTimeline:
             timelines.continue_dict[name] = cont
         else:
             timelines.continue_dict[name] = ServerDict()
+            
+        if resources:
+            self.resources = resources
+        else:
+            self.resources = ServerDict()
+        timelines.resources_dict[name] = self.resources
     
     def _add_by_id(self, snapshotid):
         try:
@@ -144,7 +152,9 @@ class ServerTimeline:
         oldude = self.timelines.ude_dict[self.name].copy()
         sde = {k:oldsde[k] for k in oldsde if k < ic}
         ude = {k:oldude[k] for k in oldude if k < ic}
-        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde, ude=ude)
+        # TODO copy resources
+        resources = {}
+        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde, ude=ude, resources=resources)
         for k in self.snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
@@ -190,11 +200,21 @@ class ServerTimeline:
     
     def get_snapshots(self):
         return self.snapshots
+    
+    def get_resource(self, type, location):
+        enclocation = base64.b64encode(bytes(location, 'utf-8'))
+        return "resources." + self.name + "." + type + "." + enclocation
+    
+    def new_resource(self, type, location):
+        self.resources[(type, location)] = ServerDict()
+        enclocation = base64.b64encode(bytes(location, 'utf-8'))
+        return "resources." + self.name + "." + type + "." + enclocation
 
 class ServerTimelines:
     def __init__(self, snapshotdict, sde_dict, ude_dict
                  #,rnext_dict, rcontinue_dict
-                 ,next_dict, continue_dict
+                 ,next_dict, continue_dict,
+                 resources_dict
                  ):
         self.snapshotdict = snapshotdict
         self.sde_dict = sde_dict
@@ -203,6 +223,7 @@ class ServerTimelines:
         #self.rcontinue_dict = rcontinue_dict
         self.next_dict = next_dict
         self.continue_dict = continue_dict
+        self.resources_dict = resources_dict
         self.timelines = {} # name:timeline
         self.current_timeline = None
     
@@ -252,6 +273,7 @@ def server(dofork=False):
     bpbynumber.append(None)
     breaks = ServerDict()
     snapshots = ServerDict()
+    resources_dict = {}
     sde_dict = {}
     ude_dict = {}
     
@@ -267,7 +289,7 @@ def server(dofork=False):
     continue_dict = {}
     
     #timelines = ServerTimelines(snapshots, sde_dict, ude_dict, rnext_dict, rcontinue_dict)
-    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, next_dict, continue_dict)
+    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, next_dict, continue_dict, resources_dict)
     try:
         os.unlink('/tmp/shareddict')
     except OSError:
@@ -295,6 +317,7 @@ def server(dofork=False):
                         bstream = conn.recv()
                         try:
                             objref,method,args,kargs = pickle.loads(bstream)
+                            m = re.match('^resources\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
                             #if objref == 'sde':
                             #    r = getattr(sde, method)(*args, **kargs)
                             if objref == 'bplist':
@@ -328,6 +351,14 @@ def server(dofork=False):
                             elif objref.startswith('continue.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(continue_dict[id], method)(*args, **kargs)
+                            elif objref.startswith('resources.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(resources_dict[id], method)(*args, **kargs)
+                            elif m:
+                                timeline = m.group('timeline')
+                                typ = m.group('type')
+                                location = str(base64.b64decode(m.group('location')), 'utf-8')
+                                r = getattr(resources_dict[timeline][(type, location)])
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
@@ -416,14 +447,14 @@ class DictProxy:
     def update(self, d):
         return self._remote_invoke('update',(d,), {})
 
-    def keys(self): # TODO this doesn't work
+    def keys(self): # this doesn't work
         return self._remote_invoke('keys',(), {})
         
-    def values(self): # TODO this doesn't work
-        return self._remote_invoke('values',(), {})
-    
-    def get(self, k, d=None): # TODO this doesn't work
-        return self._remote_invoke('get',(k, d), {})
+    #def values(self): # this doesn't work
+    #    return self._remote_invoke('values',(), {})
+    #
+    #def get(self, k, d=None): # this doesn't work
+    #    return self._remote_invoke('get',(k, d), {})
         
     def __len__(self):
         return self._remote_invoke('__len__',(), {})
@@ -575,6 +606,17 @@ class TimelineProxy:
     def get_snapshots(self):
         return self._remote_invoke('get_snapshots',(), {})
         
+    def get_resource(self):
+        debug('get_resource')
+        objref = self._remote_invoke('get_resource',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+    
+    def new_resource(self, type, location):
+        debug('new resource')
+        objref = self._remote_invoke('get_resource',(), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
 
 class TimelinesProxy:
     def __init__(self, objref="timelines", conn=None):
