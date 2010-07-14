@@ -46,29 +46,31 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 
 mode = 'normal'
 
-def __import__(*args):
+#def __import__(*args):
+def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
-        return __pythonimport__(*args)
+        return __pythonimport__(name, globals, locals, fromlist, level)
     else:
         pass
     new = True
-    if args[0] in dbg.modules:
+    if name in dbg.modules:
         new = False
-    mod = __pythonimport__(*args)
+    mod = __pythonimport__(name, globals, locals, fromlist, level)
     
     if new:
-        dbg.modules.append(args[0])
-        if args[0][:2] != '__':
+        dbg.modules.append(name)
+        if name[:2] != '__':
             try:
-                module = __pythonimport__('__'+args[0], globals(), locals(), [])
+                module = __pythonimport__('__'+name, globals, locals, fromlist)
                 #debug("success")
             except ImportError:
                 pass
                 #debug("nosuccess", sys.path)
+                #debug("nosuccess", name)
             else:
-                #debug('Importing a module with patching', args[0])
+                debug('Importing a module with patching', name)
                 for key in module.__dict__.keys():
-                    if key == args[0]:
+                    if key == name:
                         continue
                     if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
                         continue
@@ -97,16 +99,22 @@ class SnapshotData:
 
 class Epdb(pdb.Pdb):
     def __init__(self):
-        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb', 'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale', 'codecs'])
+        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb',
+                'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
+                'codecs', 'types', 'io', 'builtins', 'ctypes', 'linecache',
+                'uuid', 'shelve', 'collections', 'tempfile', '_thread',
+                'subprocess', 're', 'sre_parse', 'struct', 'ctypes',
+                'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
+                'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
+                'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
         """Extend to skip all modules that start with double underscore"""
-        #debug("Check skipped", module_name)
         base = pdb.Pdb.is_skipped_module(self, module_name)
         if base == True:
             return True
-        
+        #debug("not skipped", module_name)
         if module_name == '__main__':
             return False
         return module_name.startswith('__')
@@ -337,15 +345,6 @@ class Epdb(pdb.Pdb):
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
         
-        #rcontinue = dbg.current_timeline.get_rcontinue()
-        #visits = rcontinue.get((filename,lineno), [])
-        #visits.append(dbg.ic+1)
-        #rcontinue[(filename,lineno)] = visits
-        #try:
-        #    self.rcontinue_ln[(filename,lineno)].append(dbg.ic+1)
-        #except:
-        #    self.rcontinue_ln[(filename,lineno)] = [dbg.ic+1]
-        
         if dbg.mode == 'normal':
             continued = dbg.current_timeline.get_continue()
             try:
@@ -354,6 +353,22 @@ class Epdb(pdb.Pdb):
                 continued[(filename, lineno)] = l
             except:
                 continued[(filename, lineno)] = [dbg.ic + 1]
+        elif dbg.mode == 'replay' or dbg.mode == 'redo':
+            # Here the resources are restored for the next instruction
+            debug("List resources")
+            resources = dbg.current_timeline.get_resources()
+            for k in resources:
+                # Its important here to use dbg.current_timeline.get_resource
+                # instead of resources[k] to get a DictProxy instead of a Serverdict
+                
+                #debug(k, resources[k], type(resources[k]))
+                #debug(k, dbg.current_timeline.get_resource(*k), type(dbg.current_timeline.get_resource(*k)))
+                
+                resource = dbg.current_timeline.get_resource(*k)
+                debug(resource)
+                debug(resource.get(dbg.ic), dbg.ic)
+                
+            debug("------")
         
         if self.running_mode == 'continue':
             #debug("running mode continue")
@@ -743,7 +758,7 @@ class Epdb(pdb.Pdb):
                 #self.highestsnapshot() # TODO
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
-                    debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
+                    #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                     self.set_next(self.curframe)
                     #self.set_step()
                     self.running_mode = 'next'
@@ -768,7 +783,7 @@ class Epdb(pdb.Pdb):
                 debug("No snapshot made. This shouldn't be")
                 return
             if s.ic <= dbg.ic:
-                debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
+                #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                 self.set_next(self.curframe)
                 #self.set_step()
                 self.running_mode = 'next'

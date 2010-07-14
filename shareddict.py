@@ -11,6 +11,7 @@ import collections
 import select
 import base64
 import re
+import traceback
 from debug import debug
     
 def connect(address):
@@ -60,6 +61,9 @@ class ServerDict(dict):
         r = ServerDict()
         r.update(self)
         return r
+    #def __setitem__(self, id, value):
+    #    debug("server __setitem__")
+    #    return dict.__setitem__(self, id, value)
 
 class ServerList(list):
     def __iter__(self):
@@ -122,7 +126,6 @@ class ServerTimeline:
         try:
             self.timelines.snapshotdict[snapshotid].references += 1
             self.snapshots.append(snapshotid)
-            debug("Snapshot added to timeline!!!!!!")
         except:
             raise Exception("Snapshot doesn't exist " + str(snaphotid))
         
@@ -191,23 +194,29 @@ class ServerTimeline:
         return self.ic
     
     def get_max_ic(self):
-        debug("Server get maxic: ", self.max_ic)
+        #debug("Server get maxic: ", self.max_ic)
         return self.max_ic
     
     def set_max_ic(self, maxic):
-        debug("Server set maxic: ", maxic)
+        #debug("Server set maxic: ", maxic)
         self.max_ic = maxic
     
     def get_snapshots(self):
         return self.snapshots
     
     def get_resource(self, type, location):
-        enclocation = base64.b64encode(bytes(location, 'utf-8'))
+        enclocation = str(base64.b64encode(bytes(location, 'utf-8')), 'utf-8')
         return "resources." + self.name + "." + type + "." + enclocation
     
+    def get_resources(self):
+        return "resources." + self.name
+    
     def new_resource(self, type, location):
+        #debug("NEW RESOURCE")
         self.resources[(type, location)] = ServerDict()
-        enclocation = base64.b64encode(bytes(location, 'utf-8'))
+        #debug("NEW1")
+        enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
+        #debug("NEW2")
         return "resources." + self.name + "." + type + "." + enclocation
 
 class ServerTimelines:
@@ -318,6 +327,7 @@ def server(dofork=False):
                         try:
                             objref,method,args,kargs = pickle.loads(bstream)
                             m = re.match('^resources\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
+                            #debug('matching done')
                             #if objref == 'sde':
                             #    r = getattr(sde, method)(*args, **kargs)
                             if objref == 'bplist':
@@ -351,19 +361,21 @@ def server(dofork=False):
                             elif objref.startswith('continue.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(continue_dict[id], method)(*args, **kargs)
-                            elif objref.startswith('resources.'):
-                                id = '.'.join(objref.split('.')[1:])
-                                r = getattr(resources_dict[id], method)(*args, **kargs)
                             elif m:
                                 timeline = m.group('timeline')
                                 typ = m.group('type')
-                                location = str(base64.b64decode(m.group('location')), 'utf-8')
-                                r = getattr(resources_dict[timeline][(type, location)])
+                                location = str(base64.b64decode(bytes(m.group('location'), 'utf-8')), 'utf-8')
+                                
+                                r = getattr(resources_dict[timeline][(typ, location)], method)(*args, **kargs)
+                            elif objref.startswith('resources.'):
+                                id = '.'.join(objref.split('.')[1:])
+                                r = getattr(resources_dict[id], method)(*args, **kargs)
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
                                     do_quit = True
                         except Exception as e:
+                            #traceback.print_exc()
                             conn.send(pickle.dumps(('EXC', e)))
                         else:
                             conn.send(pickle.dumps(('RET', r)))
@@ -450,11 +462,11 @@ class DictProxy:
     def keys(self): # this doesn't work
         return self._remote_invoke('keys',(), {})
         
-    #def values(self): # this doesn't work
-    #    return self._remote_invoke('values',(), {})
-    #
-    #def get(self, k, d=None): # this doesn't work
-    #    return self._remote_invoke('get',(k, d), {})
+    def values(self): # this doesn't work
+        return self._remote_invoke('values',(), {})
+    
+    def get(self, k, d=None): # this doesn't work
+        return self._remote_invoke('get',(k, d), {})
         
     def __len__(self):
         return self._remote_invoke('__len__',(), {})
@@ -606,15 +618,20 @@ class TimelineProxy:
     def get_snapshots(self):
         return self._remote_invoke('get_snapshots',(), {})
         
-    def get_resource(self):
+    def get_resource(self, type, location):
         debug('get_resource')
-        objref = self._remote_invoke('get_resource',(), {})
+        objref = self._remote_invoke('get_resource',(type,location), {})
+        proxy = DictProxy(objref=objref, conn=self.conn)
+        return proxy
+
+    def get_resources(self):
+        objref = self._remote_invoke('get_resources',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
     
     def new_resource(self, type, location):
         debug('new resource')
-        objref = self._remote_invoke('get_resource',(), {})
+        objref = self._remote_invoke('new_resource',(type, location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
 
