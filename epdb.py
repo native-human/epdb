@@ -497,6 +497,15 @@ class Epdb(pdb.Pdb):
             print(e.id, e.ic)
         self.mp.list_snapshots()
 
+    def do_resources(self, arg):
+        debug("Show resources")
+        for k in dbg.current_timeline.get_resources():
+            resource = dbg.current_timeline.get_resource(*k)
+            for rk in resource:
+                debug(" ", rk, resource[rk])
+            debug(k)
+        debug("------")
+
     def do_ic(self, arg):
         """Shows the current instruction count"""
         debug('The instruction count is:', dbg.ic)

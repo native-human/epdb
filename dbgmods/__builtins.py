@@ -41,7 +41,7 @@ class FileResourceManager:
     
     def restore(self, id):
         content = self.dict[id]
-        with open(self.filename, 'w') as f:
+        with orig_open(self.filename, 'w') as f:
             f.write(content)
 
 class FileProxy:
@@ -54,6 +54,9 @@ class FileProxy:
         self._resource = dbg.current_timeline.new_resource('file', file)
         log.debug("_resource worked")
         self._fileresourcemanager = FileResourceManager(file)
+        id = self._fileresourcemanager.save()
+        for i in range(dbg.ic):
+            self._resource[dbg.ic] = id
     def write(self, b):
         def replay(self, b):
             self._resource.set_restore()
