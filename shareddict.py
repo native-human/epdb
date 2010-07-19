@@ -72,7 +72,7 @@ class ServerList(list):
 class ServerTimeline:
     def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None,
                  ic=0,
-                 next=None, cont=None, resources=None,
+                 next=None, cont=None, resources=None, managers=None
                  #, rnext=None, rcontinue=None
                  ):
         self.snapshots = snapshots
@@ -121,6 +121,12 @@ class ServerTimeline:
         else:
             self.resources = ServerDict()
         timelines.resources_dict[name] = self.resources
+        
+        if managers:
+            self.managers = managers
+        else:
+            self.managers = ServerDict()
+        timelines.managers_dict[name] = self.managers
     
     def _add_by_id(self, snapshotid):
         try:
@@ -155,9 +161,11 @@ class ServerTimeline:
         oldude = self.timelines.ude_dict[self.name].copy()
         sde = {k:oldsde[k] for k in oldsde if k < ic}
         ude = {k:oldude[k] for k in oldude if k < ic}
-        # TODO copy resources
+        # TODO copy resources and managers
         resources = {}
-        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde, ude=ude, resources=resources)
+        managers = {}
+        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde,
+                              ude=ude, resources=resources, managers=managers)
         for k in self.snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
@@ -218,12 +226,21 @@ class ServerTimeline:
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
         #debug("NEW2")
         return "resources." + self.name + "." + type + "." + enclocation
+    
+    def create_manager(self, identification, manager):
+        """identification is a tuple (type, location)"""
+        self.managers[identification] = manager
+        return self.managers[identification]
+        
+    def get_manager(self, identification):
+        return self.managers[identification]
+        #return "managers." + self.name + "." + type + "." + enclocation
 
 class ServerTimelines:
     def __init__(self, snapshotdict, sde_dict, ude_dict
                  #,rnext_dict, rcontinue_dict
                  ,next_dict, continue_dict,
-                 resources_dict
+                 resources_dict, managers_dict
                  ):
         self.snapshotdict = snapshotdict
         self.sde_dict = sde_dict
@@ -233,6 +250,7 @@ class ServerTimelines:
         self.next_dict = next_dict
         self.continue_dict = continue_dict
         self.resources_dict = resources_dict
+        self.managers_dict = managers_dict
         self.timelines = {} # name:timeline
         self.current_timeline = None
     
@@ -283,6 +301,8 @@ def server(dofork=False):
     breaks = ServerDict()
     snapshots = ServerDict()
     resources_dict = {}
+    managers_dict = {}
+    
     sde_dict = {}
     ude_dict = {}
     
@@ -298,7 +318,9 @@ def server(dofork=False):
     continue_dict = {}
     
     #timelines = ServerTimelines(snapshots, sde_dict, ude_dict, rnext_dict, rcontinue_dict)
-    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, next_dict, continue_dict, resources_dict)
+    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, next_dict,
+                                continue_dict, resources_dict, managers_dict
+                                )
     try:
         os.unlink('/tmp/shareddict')
     except OSError:
@@ -327,6 +349,7 @@ def server(dofork=False):
                         try:
                             objref,method,args,kargs = pickle.loads(bstream)
                             m = re.match('^resources\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
+                            #manager_match = re.match('^managers\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
                             #debug('matching done')
                             #if objref == 'sde':
                             #    r = getattr(sde, method)(*args, **kargs)
@@ -361,11 +384,18 @@ def server(dofork=False):
                             elif objref.startswith('continue.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(continue_dict[id], method)(*args, **kargs)
+                            #elif manager_match:
+                            #    timeline = m.group('timeline')
+                            #    typ = m.group('type')
+                            #    location = str(base64.b64decode(bytes(m.group('location'), 'utf-8')), 'utf-8')
+                            #    r = getattr(managers_dict[timeline][(typ, location)], method)(*args, **kargs)
+                            #elif objref.startswith('managers.'):
+                            #    id = '.'.join(objref.split('.')[1:])
+                            #    r = getattr(managers_dict[id], method)(*args, **kargs)
                             elif m:
                                 timeline = m.group('timeline')
                                 typ = m.group('type')
                                 location = str(base64.b64decode(bytes(m.group('location'), 'utf-8')), 'utf-8')
-                                
                                 r = getattr(resources_dict[timeline][(typ, location)], method)(*args, **kargs)
                             elif objref.startswith('resources.'):
                                 id = '.'.join(objref.split('.')[1:])
@@ -375,6 +405,7 @@ def server(dofork=False):
                                 if method == 'shutdown':
                                     do_quit = True
                         except Exception as e:
+                            #debug("Remote Exception")
                             #traceback.print_exc()
                             conn.send(pickle.dumps(('EXC', e)))
                         else:
@@ -634,6 +665,13 @@ class TimelineProxy:
         objref = self._remote_invoke('new_resource',(type, location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
+    
+    def create_manager(self, identification, manager):
+        """identification is a tuple (type, location)"""
+        return self._remote_invoke('create_manager',(identification, manager), {})
+        
+    def get_manager(self, identification):
+        return self._remote_invoke('get_manager',(identification,), {})
 
 class TimelinesProxy:
     def __init__(self, objref="timelines", conn=None):

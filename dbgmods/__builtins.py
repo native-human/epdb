@@ -25,10 +25,15 @@ class FileProxy:
         self.__action_hist__ = []
         self._args = args
         file = args[0]
-        log.debug("before _resource")
+        #log.debug("before _resource")
         self._resource = dbg.current_timeline.new_resource('file', file)
-        log.debug("_resource worked")
-        self._fileresourcemanager = resources.FileResourceManager(file)
+        #log.debug("_resource worked")
+        rm = resources.FileResourceManager(file)
+        #print("Try to create a manager")
+        dbg.current_timeline.create_manager(('file',file),rm)
+        #print("manager created -> try getting the manager")
+        self._fileresourcemanager = dbg.current_timeline.get_manager(('file',file))
+        #print("fileresourcemanager: ", self._fileresourcemanager)
         id = self._fileresourcemanager.save()
         self._resource[dbg.ic] = id
         
@@ -42,10 +47,10 @@ class FileProxy:
         def debug(self, b):
             #self.resource.set_save()
             try:
-                id = self._fileresourcemanager.save()
-                self._resource[dbg.ic] = id
-                dbg.snapshottingcontrol.set_make_snapshot()
                 value = self.__file__.write(b)
+                id = self._fileresourcemanager.save()
+                self._resource[dbg.ic+1] = id
+                dbg.snapshottingcontrol.set_make_snapshot()
             except:
                 traceback.print_exc()
             return value
@@ -79,6 +84,8 @@ class FileProxy:
         def debug(self):
             log.debug('Doing close')
             self.__file__.close()
+            id = self._fileresourcemanager.save()
+            self._resource[dbg.ic+1] = id
         def replay(self):
             log.debug('Replaying close')
             self.__file__.close()

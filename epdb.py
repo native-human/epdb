@@ -341,21 +341,26 @@ class Epdb(pdb.Pdb):
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             for i in range(dbg.ic, -1, -1):
-                resk = resource.get(i, None)
-                if not resk is None:
+                res = resource.get(i, None)
+                if not res is None:
                     break
             else:
                 for i in range(dbg.ic+1, dbg.current_timeline.get_max_ic()):
-                    resk = resource.get(i, None)
-                    if not resk is None:
+                    res = resource.get(i, None)
+                    if not res is None:
                         break
                     else:
                         debug("Error: No key found for set resources")
                         return
-            debug("Key {0} for resource {1}".format(resk, resource))
+            debug("Key {0} for resource {1}".format(res, resource))
+            #debug("k: ", k)
+            manager = dbg.current_timeline.get_manager(k)
+            #debug("manager: ", manager)
+            manager.restore(res)
             #for rk in resource:
             #    debug(" ", rk, resource[rk])
             #debug(k)
+            
     def do_set_resources(self, args):
         self.set_resources()
     
@@ -408,12 +413,9 @@ class Epdb(pdb.Pdb):
             if self.break_here(frame):
                 self.stopnocalls = None
                 setmode()
-                #debug("Breakpoint interaction")
                 self.interaction(frame, None)
-                #debug("After interaction")
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 setmode()
-                #debug("Nocall interaction")
                 self.interaction(frame, None)
         else:
             #debug("running mode else")
@@ -601,6 +603,8 @@ class Epdb(pdb.Pdb):
             dbg.current_timeline.deactivate(dbg.ic)
     
     def interaction(self, frame, traceback):
+        # TODO is this really correct? What happens if I jump over the
+        # command? Will a snapshot be made?
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
             debug('interaction snapshot made or activated')
@@ -609,6 +613,8 @@ class Epdb(pdb.Pdb):
                 if self.stopafter > 0:    # TODO this looks stupid
                     self.stopafter -= 1
                 return
+        # Set all the resources before doing interaction
+        self.set_resources()
         return pdb.Pdb.interaction(self, frame, traceback)
     
     def do_rstep(self, arg):
