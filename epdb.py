@@ -106,7 +106,8 @@ class Epdb(pdb.Pdb):
                 'subprocess', 're', 'sre_parse', 'struct', 'ctypes',
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
-                'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb'])
+                'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
+                'functools', 'resources'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -334,6 +335,30 @@ class Epdb(pdb.Pdb):
         # debug("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
     
+    def set_resources(self):
+        """Sets the resources for the actual position"""
+        debug("set resources")
+        for k in dbg.current_timeline.get_resources():
+            resource = dbg.current_timeline.get_resource(*k)
+            for i in range(dbg.ic, -1, -1):
+                resk = resource.get(i, None)
+                if not resk is None:
+                    break
+            else:
+                for i in range(dbg.ic+1, dbg.current_timeline.get_max_ic()):
+                    resk = resource.get(i, None)
+                    if not resk is None:
+                        break
+                    else:
+                        debug("Error: No key found for set resources")
+                        return
+            debug("Key {0} for resource {1}".format(resk, resource))
+            #for rk in resource:
+            #    debug(" ", rk, resource[rk])
+            #debug(k)
+    def do_set_resources(self, args):
+        self.set_resources()
+    
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
         debug("user_line",frame.f_code.co_filename)
@@ -341,6 +366,7 @@ class Epdb(pdb.Pdb):
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
+
         lineno = frame.f_lineno     # TODO extend with filename so to support different files
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)

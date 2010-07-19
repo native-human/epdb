@@ -13,36 +13,11 @@ import debug as log
 import shelve
 import base64
 import traceback
+import resources
 
 def orig_open(*args, **kargs):
     return builtins.__orig__open(*args, **kargs)
 
-class FileResourceManager:
-    def __init__(self, filename):
-        log.debug('fileresource manager')
-        shelvename = os.path.join(dbg.tempdir,
-                str(base64.b32encode(bytes(filename,'utf-8')),'utf-8')
-            )
-        #shelvename = os.path.join('/tmp',
-        #        str(base64.b32encode(bytes(filename,'utf-8')),'utf-8')
-        #    )
-        log.debug('shelvename worked', shelvename)
-        try:
-            self.db = shelve.open(shelvename)
-        except:
-            traceback.print_exc()
-        log.debug('shelve open worked')
-        self.filename = filename
-    
-    def save(self):
-        id = uuid4().hex
-        self.db[id] = orig_open(self.filename).read()
-        return id
-    
-    def restore(self, id):
-        content = self.dict[id]
-        with orig_open(self.filename, 'w') as f:
-            f.write(content)
 
 class FileProxy:
     def __init__(self, file, args):
@@ -53,10 +28,10 @@ class FileProxy:
         log.debug("before _resource")
         self._resource = dbg.current_timeline.new_resource('file', file)
         log.debug("_resource worked")
-        self._fileresourcemanager = FileResourceManager(file)
+        self._fileresourcemanager = resources.FileResourceManager(file)
         id = self._fileresourcemanager.save()
-        for i in range(dbg.ic):
-            self._resource[dbg.ic] = id
+        self._resource[dbg.ic] = id
+        
     def write(self, b):
         def replay(self, b):
             self._resource.set_restore()
@@ -128,7 +103,6 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
         args = (file, mode, buffering, encoding, errors, newline, closefd)
         fp = FileProxy(fd, args)
         return fp
-    print("custom open")
     log.debug("custom open")
     #log.debug('Caller:', os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'linecache.py']:
