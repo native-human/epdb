@@ -237,6 +237,7 @@ class Epdb(pdb.Pdb):
             self.set_continue()
             #self.set_step()
             self.running_mode = 'continue'
+            dbg.mode = "redo"
             return 1
         else:
             debug("Unknown activation type", snapshot.activation_type)
@@ -449,8 +450,8 @@ class Epdb(pdb.Pdb):
             else:
                 setmode()
             
-            if self.bp_commands(frame) and self.stopafter == -1:
-                #debug("Interaction")
+            if self.bp_commands(frame) and self.stopafter == -1 and self.running_mode != 'continue':
+                debug("Interaction")
                 self.interaction(frame, None)
             else:
                 #debug("No interaction", self.stopafter)
@@ -587,7 +588,10 @@ class Epdb(pdb.Pdb):
     
     def do_mode(self, arg):
         """Shows the current mode."""
-        debug("mode: ", dbg.mode)
+        if self.is_postmortem:
+            debug("mode: postmortem", dbg.mode)
+        else:
+            debug("mode: ", dbg.mode)
         
     def do_ron(self, arg):
         """Enables reverse debugging"""
