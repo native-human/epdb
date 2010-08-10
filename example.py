@@ -1,17 +1,16 @@
 import random
+import builtins
 
 for i in range(1):
     random.seed()
-    print(random.randint(0,10))
+    builtins.print(random.randint(0,10))
 
 def blah():
-    print('blah')
-    print('blupp')
+    builtins.print('blah')
+    builtins.print('blupp')
 
-
-
-print('a')
+builtins.print('a')
 #epdb.set_trace()
 blah()
-print('b')
-print('c')
+builtins.print('b')
+builtins.print('c')

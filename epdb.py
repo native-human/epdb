@@ -292,6 +292,7 @@ class Epdb(pdb.Pdb):
         self.cmdloop()
         
     def init_reversible(self):
+        debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
         from breakpoint import Breakpoint
@@ -896,8 +897,29 @@ class Epdb(pdb.Pdb):
             debug('--Return--')
             self.interaction(frame, None)
     
+    def dispatch_call(self, frame, arg):
+        # XXX 'arg' is no longer used
+        if self.botframe is None:
+            # First call of dispatch since reset()
+            self.botframe = frame.f_back # (CT) Note that this may also be None!
+            return self.trace_dispatch
+        
+        #if not (self.stop_here(frame) or self.break_anywhere(frame)):
+        if not self.stop_here(frame) and not self.break_anywhere(frame):
+            # No need to trace this function
+            return # None
+        self.user_call(frame, arg)
+        if self.quitting: raise BdbQuit
+        return self.trace_dispatch
+    
     # The following functions are the same as in bdp except for
     # The usage of the epdb Breakpoint implementation
+    
+    def break_anywhere(self, frame):
+        # This check avoids many message calls
+        if self.is_skipped_module(frame.f_globals.get('__name__')):
+            return False
+        return self.canonic(frame.f_code.co_filename) in self.breaks
     
     def break_here(self, frame):
         filename = self.canonic(frame.f_code.co_filename)
@@ -929,6 +951,7 @@ class Epdb(pdb.Pdb):
         import linecache # Import as late as possible
         line = linecache.getline(filename, lineno)
         if not line:
+            debug("END")
             return 'Line %s:%d does not exist' % (filename,
                                    lineno)
         if not filename in self.breaks:
@@ -938,6 +961,7 @@ class Epdb(pdb.Pdb):
             list.append(lineno)
             self.breaks[filename] = list  # This is necessary for the distributed application
         bp = Breakpoint(filename, lineno, temporary, cond, funcname)
+        debug('END')
 
     def clear_break(self, filename, lineno):
         from breakpoint import Breakpoint

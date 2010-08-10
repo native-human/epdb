@@ -18,6 +18,18 @@ import resources
 def orig_open(*args, **kargs):
     return builtins.__orig__open(*args, **kargs)
 
+def print(*args, sep=' ', end='\n', file=sys.stdout):
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py']:
+        return builtins.__orig__print(*args, sep=sep, end=end, file=file)
+    else:
+        builtins.__orig__print(os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename), sep=sep, end=end, file=file)
+    log.debug("PATCHED print")
+    if dbg.mode == 'replay' or dbg.mode == 'redo':
+        log.debug('replay print')
+        return None
+    elif dbg.mode == 'normal':
+        log.debug('normal print')
+        return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
 class FileProxy:
     def __init__(self, file, args):

@@ -82,7 +82,7 @@ class Snapshot:
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
-                    else:    
+                    else:
                         #self.step_forward = steps
                         self.activation_type = "stopatnocalls"
                         self.nocalls = nocalls
@@ -95,7 +95,7 @@ class Snapshot:
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
-                    else:    
+                    else:
                         #self.step_forward = steps
                         self.activation_type = "continue"
                         dbg.current_timeline = dbg.timelines.get_current_timeline()

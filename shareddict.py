@@ -12,6 +12,7 @@ import select
 import base64
 import re
 import traceback
+import _thread
 from debug import debug
     
 def connect(address):
@@ -454,6 +455,14 @@ class DictProxy:
         self.objref = objref
     
     def _remote_invoke(self, method, args, kargs):
+        #debug("Dict Proxy/Remote invoke", self.objref, method, args, kargs, os.getpid())
+        #fn = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_back.f_code.co_filename)
+        #lno = sys._current_frames()[_thread.get_ident()].f_back.f_back.f_back.f_lineno
+        #fn2 = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename)
+        #lno2 = sys._current_frames()[_thread.get_ident()].f_back.f_back.f_lineno
+        #fn3 = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
+        #lno3 = sys._current_frames()[_thread.get_ident()].f_back.f_lineno
+        #debug('Filename: ', fn, lno, fn2, lno2, fn3, lno3)
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
         t,r = pickle.loads(self.conn.recv())
         if t == 'RET':
