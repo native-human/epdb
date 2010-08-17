@@ -30,7 +30,9 @@ def readconfig():
     except:
         dbgmods = '/home/patrick/myprogs/epdb/dbgmods'
     dbgpath = dbgmods
-    sys.path.append(dbgmods)
+    debug("dbgmods", dbgmods)
+    if not dbgmods in sys.path:
+        sys.path.append(dbgmods)
 
 origpath = sys.path[:]
 readconfig()
@@ -52,8 +54,9 @@ def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
         module = __pythonimport__('__builtins', globals, locals, fromlist)
     except ImportError:
         pass
+        #debug("Failed importing __builtins", sys.path)
     else:
-        #debug('Importing builtin with patching', name)
+        #debug('Importing __builtins with patching', name)
         for key in module.__dict__.keys():
             if key == name:
                 continue
