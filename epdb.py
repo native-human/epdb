@@ -46,7 +46,29 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
 
 mode = 'normal'
 
-#def __import__(*args):
+def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
+    mod = __pythonimport__(name, globals, locals, fromlist, level)
+    try:
+        module = __pythonimport__('__builtins', globals, locals, fromlist)
+    except ImportError:
+        pass
+    else:
+        #debug('Importing builtin with patching', name)
+        for key in module.__dict__.keys():
+            if key == name:
+                continue
+            if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
+                continue
+            
+            # if the name doesn't exist in the original file -> ignore it
+            try:
+                setattr(mod, '__orig__'+key, getattr(mod,key))
+                setattr(mod, key, getattr(module, key))
+            except AttributeError:
+                pass
+    return mod
+
+
 def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
         return __pythonimport__(name, globals, locals, fromlist, level)
@@ -107,7 +129,7 @@ class Epdb(pdb.Pdb):
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'resources'])
+                'functools', 'resources', 'bdb', 'debug', 'runpy'])
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -258,9 +280,10 @@ class Epdb(pdb.Pdb):
         # (this gets rid of pdb's globals and cleans old variables on restarts).
         import __main__
         __main__.__dict__.clear()
+        bltins = __bltins_import__("builtins").__dict__
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
-                                  "__builtins__": __builtins__,
+                                  "__builtins__": bltins,
                                 })
 
         # When bdb sets tracing, a number of call and line events happens
