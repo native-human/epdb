@@ -122,7 +122,7 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
         args = (file, mode, buffering, encoding, errors, newline, closefd)
         fp = FileProxy(fd, args)
         return fp
-    log.debug("custom open")
+    #log.debug("custom open")
     #log.debug('Caller:', os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'linecache.py']:
         #log.debug("internal open")

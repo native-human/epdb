@@ -53,6 +53,10 @@ class Breakpoint:
         else:
             self.bplist[file, line] = [self]
 
+    def __eq__(self, other):
+        if self.number == other.number:
+            return True
+        return False
 
     def deleteMe(self):
         index = (self.file, self.line)

@@ -553,6 +553,9 @@ class ListProxy:
     def __sizeof__(self):
         return self._remote_invoke('__sizeof__',(), {})
 
+    def __len__(self):
+        return self._remote_invoke('__len__',(), {})
+
     def append(self, object):
         return self._remote_invoke('append',(object,), {})
 

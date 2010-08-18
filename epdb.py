@@ -1006,6 +1006,7 @@ class Epdb(pdb.Pdb):
         if not self.breaks[filename]:
             del self.breaks[filename]
 
+
     def clear_bpbynumber(self, arg):
         from breakpoint import Breakpoint
         try:
@@ -1147,6 +1148,51 @@ class Epdb(pdb.Pdb):
                 print("Breakpoint %d at %s:%d" % (bp.number,
                                                                  bp.file,
                                                                  bp.line), file=self.stdout)
+    def do_clear(self, arg):
+        """Three possibilities, tried in this order:
+        clear -> clear all breaks, ask for confirmation
+        clear file:lineno -> clear all breaks at file:lineno
+        clear bpno bpno ... -> clear breakpoints by number"""
+        from breakpoint import Breakpoint
+        if not arg:
+            try:
+                reply = input('Clear all breaks? ')
+            except EOFError:
+                reply = 'no'
+            reply = reply.strip().lower()
+            if reply in ('y', 'yes'):
+                self.clear_all_breaks()
+            return
+        if ':' in arg:
+            # Make sure it works for "clear C:\foo\bar.py:12"
+            i = arg.rfind(':')
+            filename = arg[:i]
+            arg = arg[i+1:]
+            try:
+                lineno = int(arg)
+            except ValueError:
+                err = "Invalid line number (%s)" % arg
+            else:
+                err = self.clear_break(filename, lineno)
+            if err: print('***', err, file=self.stdout)
+            return
+        numberlist = arg.split()
+        for i in numberlist:
+            try:
+                i = int(i)
+            except ValueError:
+                print('Breakpoint index %r is not a number' % i, file=self.stdout)
+                continue
+
+            if not (0 <= i < len(Breakpoint.bpbynumber)):
+                print('No breakpoint numbered', i, file=self.stdout)
+                continue
+            err = self.clear_bpbynumber(i)
+            if err:
+                print('***', err, file=self.stdout)
+            else:
+                print('Deleted breakpoint', i, file=self.stdout)
+    do_cl = do_clear # 'c' is already an abbreviation for 'continue'
 
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
