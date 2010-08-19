@@ -1,4 +1,5 @@
 import pdb
+
 import sys
 import linecache
 import cmd
@@ -1050,8 +1051,8 @@ class Epdb(pdb.Pdb):
     def get_breaks(self, filename, lineno):
         from breakpoint import Breakpoint
         filename = self.canonic(filename)
-        if filename in self.breaks:
-            debug("Get_breaks: Filename", filename)
+        #if filename in self.breaks:
+        #    debug("Get_breaks: Filename", filename)
         return filename in self.breaks and \
             lineno in self.breaks[filename] and \
             Breakpoint.bplist[filename, lineno] or []
@@ -1093,8 +1094,8 @@ class Epdb(pdb.Pdb):
             filename = arg[:colon].rstrip()
             f = self.lookupmodule(filename)
             if not f:
-                print('*** ', repr(filename), end=' ', file=self.stdout)
-                print('not found from sys.path', file=self.stdout)
+                debug('*** ', repr(filename), end=' ')
+                debug('not found from sys.path')
                 return
             else:
                 filename = f
@@ -1102,7 +1103,7 @@ class Epdb(pdb.Pdb):
             try:
                 lineno = int(arg)
             except ValueError as msg:
-                print('*** Bad lineno:', arg, file=self.stdout)
+                debug('*** Bad lineno:', arg)
                 return
         else:
             # no colon; can be lineno or function
@@ -1128,7 +1129,7 @@ class Epdb(pdb.Pdb):
                     # last thing to try
                     (ok, filename, ln) = self.lineinfo(arg)
                     if not ok:
-                        print('*** The specified object', end=' ', file=self.stdout)
+                        debug('*** The specified object', end=' ')
                         print(repr(arg), end=' ', file=self.stdout)
                         print('is not a function', file=self.stdout)
                         print('or was not found along sys.path.', file=self.stdout)
@@ -1142,12 +1143,32 @@ class Epdb(pdb.Pdb):
         if line:
             # now set the break point
             err = self.set_break(filename, line, temporary, cond, funcname)
-            if err: print('***', err, file=self.stdout)
+            if err:
+                debug('***', err)
             else:
                 bp = self.get_breaks(filename, line)[-1]
-                print("Breakpoint %d at %s:%d" % (bp.number,
+                debug("Breakpoint %d at %s:%d" % (bp.number,
                                                                  bp.file,
-                                                                 bp.line), file=self.stdout)
+                                                                 bp.line))
+    
+    def checkline(self, filename, lineno):
+        """Check whether specified line seems to be executable.
+
+        Return `lineno` if it is, 0 if not (e.g. a docstring, comment, blank
+        line or EOF). Warning: testing is not comprehensive.
+        """
+        line = linecache.getline(filename, lineno, self.curframe.f_globals)
+        if not line:
+            print('End of file', file=self.stdout)
+            return 0
+        line = line.strip()
+        # Don't allow setting breakpoint at a blank line
+        if (not line or (line[0] == '#') or
+             (line[:3] == '"""') or line[:3] == "'''"):
+            debug('*** Blank or comment')
+            return 0
+        return lineno
+    
     def do_clear(self, arg):
         """Three possibilities, tried in this order:
         clear -> clear all breaks, ask for confirmation
@@ -1174,7 +1195,7 @@ class Epdb(pdb.Pdb):
                 err = "Invalid line number (%s)" % arg
             else:
                 err = self.clear_break(filename, lineno)
-            if err: print('***', err, file=self.stdout)
+            if err: debug('***', err)
             return
         numberlist = arg.split()
         for i in numberlist:
@@ -1185,13 +1206,15 @@ class Epdb(pdb.Pdb):
                 continue
 
             if not (0 <= i < len(Breakpoint.bpbynumber)):
-                print('No breakpoint numbered', i, file=self.stdout)
+                debug('No breakpoint numbered', i)
                 continue
+            
             err = self.clear_bpbynumber(i)
             if err:
-                print('***', err, file=self.stdout)
+                debug('***', err)
             else:
-                print('Deleted breakpoint', i, file=self.stdout)
+                debug('Deleted breakpoint', i
+                      )
     do_cl = do_clear # 'c' is already an abbreviation for 'continue'
 
 # copied from pdb to make use of epdb's breakpoint implementation
