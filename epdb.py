@@ -393,9 +393,21 @@ class Epdb(pdb.Pdb):
     def do_set_resources(self, args):
         self.set_resources()
     
+    def user_exception(self, frame, exc_info):
+        """This function is called if an exception occurs,
+        but only if we are to stop at or just below this level."""
+        debg("EXCEPTION")
+        exc_type, exc_value, exc_traceback = exc_info
+        frame.f_locals['__exception__'] = exc_type, exc_value
+        exc_type_name = exc_type.__name__
+        print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
+        self.interaction(frame, exc_traceback)
+    
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
         debug("user_line",frame.f_code.co_filename)
+        self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
+        debug("lastline:", self.lastline)
         def setmode():
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
@@ -903,10 +915,13 @@ class Epdb(pdb.Pdb):
             next_ic = dbg.current_timeline.get_next()
             next_ic[callic] = dbg.ic + 1
         except:
-            debug("user_return exception")
             # TODO this usually happens when the program has finished
             # or ron was set when there was something on the stack
             # in this case epdb simply fall back to step backwards.
+            
+            # In case the program ends send the information of the last line
+            # executed.
+            print(self.lastline)
             pass
 
         self.nocalls -= 1
@@ -1300,6 +1315,7 @@ def post_mortem(t=None):
 
     p = Epdb()
     p.reset()
+    debug('post-mortem interaction')
     p.interaction(None, t)
 
 def pm():
