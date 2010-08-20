@@ -588,13 +588,13 @@ class Epdb(pdb.Pdb):
         try:
             timeline = dbg.timelines.get(arg)
         except:
-            debug("Timeline '",arg,"' dosn't exist", sep='')
+            debug("Timeline '",arg,"' doesn't exist", sep='')
             return    
         dbg.current_timeline.deactivate(dbg.ic)
         ic = timeline.get_ic()
         #dbg.sde = timeline.get_sde()
         dbg.timelines.set_current_timeline(timeline.get_name())
-        debug("Switched to timeline ", timeline.get_name())
+        debug("Switched to timeline", timeline.get_name())
         dbg.current_timeline = timeline
         s = self.findsnapshot(ic)
         self.mp.activatesp(s.id, ic - s.ic)
@@ -615,6 +615,7 @@ class Epdb(pdb.Pdb):
         dbg.sde = newtimeline.get_sde()
         dbg.timelines.set_current_timeline(newtimeline.get_name())
         dbg.current_timeline = newtimeline
+        debug("newtimeline successful")
         
     def do_quit(self, arg):
         self._user_requested_quit = 1
