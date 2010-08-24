@@ -274,7 +274,7 @@ class Epdb(pdb.Pdb):
     #    return line
 
     def preloop(self):
-        debug("ic: ", dbg.ic)
+        debug("ic:", dbg.ic, "mode:", dbg.mode)
     
     def _runscript(self, filename):
         # The script has to run in __main__ namespace (or imports from
@@ -315,6 +315,7 @@ class Epdb(pdb.Pdb):
             return
         debug("Program has finished")
         debug("Going into post-mortem interaction mode", dbg.ic)
+        dbg.mode = "post_mortem"
         self.is_postmortem=True
         self.cmdloop()
         
@@ -615,6 +616,8 @@ class Epdb(pdb.Pdb):
         dbg.sde = newtimeline.get_sde()
         dbg.timelines.set_current_timeline(newtimeline.get_name())
         dbg.current_timeline = newtimeline
+        dbg.mode = 'normal'
+        debug("ic:", dbg.ic, "mode:", dbg.mode)
         debug("newtimeline successful")
         
     def do_quit(self, arg):
