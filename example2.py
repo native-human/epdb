@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-import builtins
+#import builtins
 from io import SEEK_SET
 
-f = builtins.open("testfile2", 'r+')
+f = open("testfile2", 'r+')
 
 print('File opened')
-print('File opened2')
 
 text = f.read()
 

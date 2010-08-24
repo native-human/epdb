@@ -4,6 +4,7 @@ import builtins
 import types
 import dbg
 from io import SEEK_SET, SEEK_END, SEEK_CUR
+import io
 import os
 import os.path
 import sys
@@ -21,14 +22,20 @@ def orig_open(*args, **kargs):
 def print(*args, sep=' ', end='\n', file=sys.stdout):
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py']:
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
-    else:
-        builtins.__orig__print(os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename), sep=sep, end=end, file=file)
+    #else:
+    #    builtins.__orig__print(os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename), sep=sep, end=end, file=file)
     log.debug("PATCHED print")
     if dbg.mode == 'replay' or dbg.mode == 'redo':
         log.debug('replay print')
+        # dbg.stdout_resource.set_restore()
         return None
     elif dbg.mode == 'normal':
         log.debug('normal print')
+        s = io.StringIO()
+        builtins.__orig__print(*args, sep=sep, end=end, file=s)
+        dbg.stdout_resource_manager.update_stdout(s.getvalue())
+        id = dbg.stdout_resource_manager.save()
+        dbg.stdout_resource[dbg.ic+1] = id
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
 class FileProxy:
@@ -51,10 +58,10 @@ class FileProxy:
         
     def write(self, b):
         def replay(self, b):
-            self._resource.set_restore()
+            #self._resource.set_restore()
             return
         def redo(self, b):
-            self._resource.set_restore()
+            #self._resource.set_restore()
             return debug(self, b)
         def debug(self, b):
             #self.resource.set_save()

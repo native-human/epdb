@@ -17,9 +17,15 @@ import _thread
 import configparser
 import shareddict
 import tempfile
+import resources
 from debug import debug
+from reprlib import Repr
 
 dbgpath = None
+
+_repr = Repr()
+_repr.maxstring = 200
+_saferepr = _repr.repr
 
 def readconfig():
     global dbgpath
@@ -316,6 +322,7 @@ class Epdb(pdb.Pdb):
         debug("Program has finished")
         debug("Going into post-mortem interaction mode", dbg.ic)
         dbg.mode = "post_mortem"
+        self.set_resources()
         self.is_postmortem=True
         self.cmdloop()
         
@@ -360,6 +367,13 @@ class Epdb(pdb.Pdb):
         
         self.breaks = shareddict.DictProxy('breaks')
         self.snapshots = shareddict.DictProxy('snapshots')
+        
+        dbg.stdout_resource = dbg.current_timeline.new_resource('__stdout__', '')
+        dbg.stdout_resource_manager = resources.StdoutResourceManager()
+        dbg.current_timeline.create_manager(('__stdout__', ''), dbg.stdout_resource_manager)
+        self.stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        id = self.stdout_manager.save()
+        dbg.stdout_resource[dbg.ic] = id  
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -397,7 +411,7 @@ class Epdb(pdb.Pdb):
     def user_exception(self, frame, exc_info):
         """This function is called if an exception occurs,
         but only if we are to stop at or just below this level."""
-        debg("EXCEPTION")
+        debug("EXCEPTION")
         exc_type, exc_value, exc_traceback = exc_info
         frame.f_locals['__exception__'] = exc_type, exc_value
         exc_type_name = exc_type.__name__
