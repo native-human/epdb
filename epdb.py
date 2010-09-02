@@ -702,13 +702,6 @@ class Epdb(pdb.Pdb):
             debug("No snapshot made. Can't step back")
             return
         
-        # Undo last step
-        try:
-            dbg.ude[dbg.ic - 1]()
-            del dbg.ude[dbg.ic - 1]
-        except KeyError:
-            pass
-        
         if s == None:
             debug("No snapshot made. Can't step back")
             return
@@ -745,15 +738,6 @@ class Epdb(pdb.Pdb):
             debug("No snapshot made. Can't step back")
             return
         
-        # Undo last steps
-        for i in range(dbg.ic, nextic,-1):
-            debug("undo ic: ", i)
-            try:
-                dbg.ude[dbg.ic - i - 1]()
-                del dbg.ude[dbg.ic - i -1]
-            except KeyError:
-                pass
-        
         steps = nextic - s.ic
         #debug('snapshot activation', s.id, steps)
         self.mp.activatesp(s.id, steps)
@@ -780,15 +764,6 @@ class Epdb(pdb.Pdb):
         if s == None:
             debug("No snapshot made. Can't step back")
             return
-
-        # Undo last steps
-        for i in range(dbg.ic, highestic,-1):
-            #debug("undo ic: ", i)
-            try:
-                dbg.ude[dbg.ic - i - 1]()
-                del dbg.ude[dbg.ic - i -1]
-            except KeyError:
-                pass
             
         steps = highestic - s.ic
         #debug('snapshot activation', s.id, steps)
@@ -798,6 +773,7 @@ class Epdb(pdb.Pdb):
     def set_next(self, frame):
         """Stop on the next line in or below the given frame."""
         if not self.ron:
+            
             return pdb.Pdb.set_next(self, frame)
         self.set_step()
         self.running_mode = 'next'
