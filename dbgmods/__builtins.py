@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# TODO make this file look more like in the thesis
+
 import builtins
 import types
 import dbg
@@ -41,7 +43,6 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
 class FileProxy:
     def __init__(self, file, args):
         self.__file__ = file
-        self.__action_hist__ = []
         self._args = args
         file = args[0]
         #log.debug("before _resource")
@@ -65,6 +66,7 @@ class FileProxy:
             return debug(self, b)
         def debug(self, b):
             #self.resource.set_save()
+            # TODO do I need this try-catch block???
             try:
                 value = self.__file__.write(b)
                 id = self._fileresourcemanager.save()
@@ -142,6 +144,7 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
         log.debug('normal')
         #return debug(file, mode, buffering, encoding, errors, newline, closefd)
         return debug(file, mode, buffering, encoding, errors, newline, closefd)
+        # TODO what happens in redo mode here???
             
 #class FileProxy:
 #    def __init__(self, file, args):

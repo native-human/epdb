@@ -278,9 +278,10 @@ class Epdb(pdb.Pdb):
     #def precmd(self, line):
     #    #debug("precommand")
     #    return line
-
-    def preloop(self):
+    def preprompt(self):
         debug("ic:", dbg.ic, "mode:", dbg.mode)
+    def preloop(self):
+        self.preprompt()  
     
     def _runscript(self, filename):
         # The script has to run in __main__ namespace (or imports from
@@ -346,7 +347,7 @@ class Epdb(pdb.Pdb):
         self.psnapshot = None
         self.psnapshot_id = None
         
-        self.prompt = '(Epdb) '
+        self.prompt = '(Epdb) \n'
         self.running_mode = None
         self.stopafter = -1
         
@@ -404,6 +405,14 @@ class Epdb(pdb.Pdb):
             #for rk in resource:
             #    debug(" ", rk, resource[rk])
             #debug(k)
+            
+    def do_p(self, arg):
+        try:
+            debug("var#", arg, "|||", repr(self._getval(arg)))
+        except:
+            debug("varerror#", arg)
+    # make "print" an alias of "p" since print isn't a Python statement anymore
+    do_print = do_p
             
     def do_set_resources(self, args):
         self.set_resources()
