@@ -117,6 +117,7 @@ class ServerTimeline:
         else:
             timelines.continue_dict[name] = ServerDict()
             
+            
         if resources:
             self.resources = resources
         else:
@@ -163,8 +164,24 @@ class ServerTimeline:
         sde = {k:oldsde[k] for k in oldsde if k < ic}
         ude = {k:oldude[k] for k in oldude if k < ic}
         # TODO copy resources and managers
-        resources = {}
+        debug("Copy resources and managers")
+        oldresources = self.timelines.resources_dict[self.name].copy()
+        oldmanagers = self.timelines.managers_dict[self.name].copy()
         managers = {}
+        resources = {}
+        for typ,location in oldresources:
+            oldresource = oldresources[(typ,location)]
+            resource = ServerDict()
+            for i in oldresource.copy():
+                if i < ic:
+                    resource[i] = oldresource[i]
+            if resource != {}:
+                resources[(typ,location)] = resource
+                managers[(typ,location)] = oldmanagers[(typ,location)]
+            
+        debug("resources", resources)
+        debug("managers", managers)
+        #managers = {k:oldmanagers[k] for k in oldmanagers if k < ic}
         copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde,
                               ude=ude, resources=resources, managers=managers)
         for k in self.snapshots:
@@ -220,12 +237,19 @@ class ServerTimeline:
     def get_resources(self):
         return "resources." + self.name
     
+    #def new_server_resource(self, type, location, timeline):
+    #    resource = ServerDict()
+    #    enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
+    #    debug("new server resource:", timeline, type, enclocation)
+    #    return resource
+    
     def new_resource(self, type, location):
-        #debug("NEW RESOURCE")
+        debug("NEW RESOURCE", type, location, self.name)
         self.resources[(type, location)] = ServerDict()
         #debug("NEW1")
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
         #debug("NEW2")
+        debug("new resource:", self.name, type, enclocation)
         return "resources." + self.name + "." + type + "." + enclocation
     
     def create_manager(self, identification, manager):

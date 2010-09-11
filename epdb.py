@@ -904,7 +904,12 @@ class Epdb(pdb.Pdb):
                 self.mp.activatesp(s.id, bestic - s.ic)
                 raise EpdbExit()
         return pdb.Pdb.do_continue(self, arg)
-    do_c = do_continue
+    do_c = do_cont = do_continue
+        
+    def do_return(self, arg):
+        debug("Return not implemented yet for epdb")
+
+    do_r = do_return
         
     def set_quit(self):
         pdb.Pdb.set_quit(self)
