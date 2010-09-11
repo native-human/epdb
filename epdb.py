@@ -577,9 +577,9 @@ class Epdb(pdb.Pdb):
         """Shows the current ude. Debugging only."""
         debug('ude:', dbg.ude)
     
-    def do_sde(self, arg):
-        """Shows the current sde. Debugging only."""
-        debug('sde:', dbg.sde)
+    def do_nde(self, arg):
+        """Shows the current nde. Debugging only."""
+        debug('nde:', dbg.nde)
     
     def do_snapshots(self, arg):
         """Lists all snapshots"""
@@ -616,7 +616,7 @@ class Epdb(pdb.Pdb):
             return    
         dbg.current_timeline.deactivate(dbg.ic)
         ic = timeline.get_ic()
-        #dbg.sde = timeline.get_sde()
+
         dbg.timelines.set_current_timeline(timeline.get_name())
         debug("Switched to timeline", timeline.get_name())
         dbg.current_timeline = timeline
@@ -636,7 +636,7 @@ class Epdb(pdb.Pdb):
         newtimeline = dbg.current_timeline.copy(arg.strip(), dbg.ic)
         dbg.current_timeline.deactivate(dbg.ic)
         #dbg.ic = newtimeline.get_ic() # not necessary here because it is the same as in the previous one
-        dbg.sde = newtimeline.get_sde()
+        dbg.nde = newtimeline.get_nde()
         dbg.timelines.set_current_timeline(newtimeline.get_name())
         dbg.current_timeline = newtimeline
         dbg.mode = 'normal'

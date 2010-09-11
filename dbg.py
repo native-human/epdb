@@ -44,9 +44,9 @@ tempdir = None
 # mode can be of 'normal', 'replay', 'redo', 'undo'
 mode = 'normal'
 
-# sde ... side effects dictionary ic:effect effect is a function
+# nde ... side effects dictionary ic:effect effect is a function
 # Will be overwritten by an proxy to the manager
-sde = {}
+nde = {}
 
 # ude ... undo effects dictionary ic:effect effect is a function
 ude = {}
@@ -63,7 +63,8 @@ modules = []
 ic = 0
 # maximum ic in current timeline.
 
-#server_sde = {}
+#server_n
+de = {}
 #server_ude = {}
 
 #dict = None
@@ -71,8 +72,8 @@ ic = 0
 #class DictManager(BaseManager):
 #    pass
 #
-#def get_sde():
-#    return server_sde
+#def get_nde():
+#    return server_nde
 
 
 #DictManager.register('get_ude', callable=lambda:server_ude, proxytype=DictProxy)
@@ -154,20 +155,21 @@ ic = 0
 #    #dict[123] = {}
 #    manager = DictManager(address=('localhost', 50000), authkey=b'epdb')
 #    manager.connect()
-#    sde = manager.dict()
+#    nde = manager.dict()
 #    #connect()
+
 #    if os.fork():
-#        sde[1] = 'hallo Welt'
-#        sde[2] = 'Number2'
+#        nde[1] = 'hallo Welt'
+#        nde[2] = 'Number2'
 #        time.sleep(3)
 #    else:
 #        #connect()
 #        #del m
-#        #del sde
+#        #del nde
 #        time.sleep(1)
 #        manager = DictManager(address=('localhost', 50000), authkey=b'epdb')
 #        manager.connect()
-#        sde = manager.dict()
+#        nde = manager.dict()
 #        time.sleep(0.5)
-#        sde[3] = 'Blah'
-#        print('done', sde, sde[1])
+#        nde[3] = 'Blah'
+#        print('done', nde, nde[1])

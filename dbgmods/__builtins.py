@@ -173,7 +173,7 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
 #                self.__file__.seek(origposition, SEEK_SET)
 #                self.__file__.write(overwritten)
 #                self.__file__.truncate(filesize)
-#            dbg.sde[dbg.ic] = {'afterposition':afterposition, 'value': value}
+#            dbg.nde[dbg.ic] = {'afterposition':afterposition, 'value': value}
 #            dbg.ude[dbg.ic] = undoer
 #            return value
 #        log.debug('Writing to the file descriptor')
@@ -191,18 +191,18 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
 #                log.debug('Undoing read')
 #                self.__file__.seek(origposition, SEEK_SET)
 #            self.__action_hist__.append(('read',value, None))
-#            dbg.sde[dbg.ic] = {'afterposition': afterposition, 'value': value}
+#            dbg.nde[dbg.ic] = {'afterposition': afterposition, 'value': value}
 #            dbg.ude[dbg.ic] = undoer
 #            log.debug('Saving redoing function on', dbg.ic)
 #            return value
 #        def replay(self, n):
-#            d = dbg.sde[dbg.ic]
+#            d = dbg.nde[dbg.ic]
 #            afterposition = d['afterposition']
 #            value = d['value']
 #            self.__file__.seek(afterposition, SEEK_SET)
 #            return value
 #            #log.debug('Position: ', dbg.ic)
-#            #return dbg.sde[dbg.ic]()
+#            #return dbg.nde[dbg.ic]()
 #        log.debug('reading from the file descriptor')
 #        #sys._current_frames()[thread.get_ident()].f_code.co_filename
 #        if dbg.mode == 'normal':

@@ -7,17 +7,17 @@ import debug as log
 #def randint(a, b):
 #    def replay(a, b):
 #        log.debug('Replaying randint', dbg.ic)
-#        return dbg.sde[dbg.ic]
+#        return dbg.nde[dbg.ic]
 #    def undo(a, b):
 #        log.debug('undoing randint')
 #    def debug(a, b):
 #        value = random.__orig__randint(a, b)
-#        dbg.sde[dbg.ic] = value
+#        dbg.nde[dbg.ic] = value
 #        log.debug('debugging randint')
 #        return value
 #    def redo(a, b):
 #        log.debug("redoing randint")
-#        return dbg.sde[dbg.ic]
+#        return dbg.nde[dbg.ic]
 #    log.debug('This is the modified randint', a, b)
 #    if dbg.mode == 'replay':
 #        return replay(a, b)

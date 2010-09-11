@@ -73,7 +73,7 @@ class Snapshot:
                         self.activation_type = "step_forward"
                         self.step_forward = steps
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.nde = dbg.current_timeline.get_nde()
                         dbg.undod = dbg.current_timeline.get_ude()
                         break
                 elif cmd == "runnext":
@@ -87,7 +87,7 @@ class Snapshot:
                         self.activation_type = "stopatnocalls"
                         self.nocalls = nocalls
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.nde = dbg.current_timeline.get_nde()
                         dbg.undod = dbg.current_timeline.get_ude()
                         break
                 elif cmd == "runcontinue":
@@ -99,12 +99,12 @@ class Snapshot:
                         #self.step_forward = steps
                         self.activation_type = "continue"
                         dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.sde = dbg.current_timeline.get_sde()
+                        dbg.nde = dbg.current_timeline.get_nde()
                         dbg.undod = dbg.current_timeline.get_ude()
                         break
         else:
             dbg.current_timeline = dbg.timelines.get_current_timeline()
-            dbg.sde = dbg.current_timeline.get_sde()
+            dbg.nde = dbg.current_timeline.get_nde()
             dbg.undod = dbg.current_timeline.get_ude()
             self.step_forward = -1
             self.activated = False
@@ -299,7 +299,7 @@ class MainProcess:
             dbg.current_timeline = dbg.timelines.new_timeline()
             name = dbg.current_timeline.get_name() 
             dbg.timelines.set_current_timeline(name)
-            dbg.sde = dbg.current_timeline.get_sde()
+            dbg.nde = dbg.current_timeline.get_nde()
             dbg.undod = dbg.current_timeline.get_ude()
     
     def list_snapshots(self):

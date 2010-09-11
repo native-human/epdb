@@ -71,7 +71,7 @@ class ServerList(list):
         return self[:]
         
 class ServerTimeline:
-    def __init__(self, timelines, name="main", snapshots=[], sde=None, ude=None,
+    def __init__(self, timelines, name="main", snapshots=[], nde=None, ude=None,
                  ic=0,
                  next=None, cont=None, resources=None, managers=None
                  #, rnext=None, rcontinue=None
@@ -83,14 +83,14 @@ class ServerTimeline:
         self.lastic = 0
         self.ic = ic
         self.max_ic = ic
-        if name in timelines.sde_dict.keys():
-            raise Exception("Name already exist in sde")
+        if name in timelines.nde_dict.keys():
+            raise Exception("Name already exist in nde")
         if name in timelines.ude_dict.keys():
             raise Exception("Name already exist in ude")
-        if sde:
-            timelines.sde_dict[name] = sde
+        if nde:
+            timelines.nde_dict[name] = nde
         else:
-            timelines.sde_dict[name] = ServerDict()
+            timelines.nde_dict[name] = ServerDict()
             
         if ude:
             timelines.ude_dict[name] = ude
@@ -158,10 +158,10 @@ class ServerTimeline:
     
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
-        ic the instruction count. ic is used to set the sde dictionary correctly"""
-        oldsde = self.timelines.sde_dict[self.name].copy()
+        ic the instruction count. ic is used to set the nde dictionary correctly"""
+        oldnde = self.timelines.nde_dict[self.name].copy()
         oldude = self.timelines.ude_dict[self.name].copy()
-        sde = {k:oldsde[k] for k in oldsde if k < ic}
+        nde = {k:oldnde[k] for k in oldnde if k < ic}
         ude = {k:oldude[k] for k in oldude if k < ic}
         # TODO copy resources and managers
         debug("Copy resources and managers")
@@ -182,15 +182,15 @@ class ServerTimeline:
         debug("resources", resources)
         debug("managers", managers)
         #managers = {k:oldmanagers[k] for k in oldmanagers if k < ic}
-        copy = ServerTimeline(self.timelines, name, self.snapshots, sde=sde,
+        copy = ServerTimeline(self.timelines, name, self.snapshots, nde=nde,
                               ude=ude, resources=resources, managers=managers)
         for k in self.snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
         return "timeline." + name
     
-    def get_sde(self):
-        return "sde." + self.name
+    def get_nde(self):
+        return "nde." + self.name
     
     def get_ude(self):
         return "ude." + self.name
@@ -262,13 +262,13 @@ class ServerTimeline:
         #return "managers." + self.name + "." + type + "." + enclocation
 
 class ServerTimelines:
-    def __init__(self, snapshotdict, sde_dict, ude_dict
+    def __init__(self, snapshotdict, nde_dict, ude_dict
                  #,rnext_dict, rcontinue_dict
                  ,next_dict, continue_dict,
                  resources_dict, managers_dict
                  ):
         self.snapshotdict = snapshotdict
-        self.sde_dict = sde_dict
+        self.nde_dict = nde_dict
         self.ude_dict = ude_dict
         #self.rnext_dict = rnext_dict
         #self.rcontinue_dict = rcontinue_dict
@@ -319,7 +319,7 @@ class ServerTimelines:
             debug(self.timelines[k].name)
             
 def server(dofork=False):
-    #sde = ServerDict()
+    #nde = ServerDict()
     bplist = ServerDict()   # weird naming, but conforming to bdb
     bpbynumber = ServerList()
     bpbynumber.append(None)
@@ -328,7 +328,7 @@ def server(dofork=False):
     resources_dict = {}
     managers_dict = {}
     
-    sde_dict = {}
+    nde_dict = {}
     ude_dict = {}
     
     # TODO rnext_dict and rcontinue_dict is likely not needed
@@ -342,8 +342,8 @@ def server(dofork=False):
     next_dict = {}
     continue_dict = {}
     
-    #timelines = ServerTimelines(snapshots, sde_dict, ude_dict, rnext_dict, rcontinue_dict)
-    timelines = ServerTimelines(snapshots, sde_dict, ude_dict, next_dict,
+    #timelines = ServerTimelines(snapshots, nde_dict, ude_dict, rnext_dict, rcontinue_dict)
+    timelines = ServerTimelines(snapshots, nde_dict, ude_dict, next_dict,
                                 continue_dict, resources_dict, managers_dict
                                 )
     try:
@@ -376,8 +376,8 @@ def server(dofork=False):
                             m = re.match('^resources\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
                             #manager_match = re.match('^managers\.(?P<timeline>[^.]*)\.(?P<type>[^.]*)\.(?P<location>[^.]*)$', objref)
                             #debug('matching done')
-                            #if objref == 'sde':
-                            #    r = getattr(sde, method)(*args, **kargs)
+                            #if objref == 'nde':
+                            #    r = getattr(nde, method)(*args, **kargs)
                             if objref == 'bplist':
                                 r = getattr(bplist, method)(*args, **kargs)
                             elif objref == 'bpbynumber':
@@ -391,9 +391,9 @@ def server(dofork=False):
                             elif objref.startswith('timeline.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(timelines._get(id), method)(*args, **kargs)
-                            elif objref.startswith('sde.'):
+                            elif objref.startswith('nde.'):
                                 id = '.'.join(objref.split('.')[1:])
-                                r = getattr(sde_dict[id], method)(*args, **kargs)
+                                r = getattr(nde_dict[id], method)(*args, **kargs)
                             elif objref.startswith('ude.'):
                                 id = '.'.join(objref.split('.')[1:])
                                 r = getattr(ude_dict[id], method)(*args, **kargs)
@@ -640,8 +640,8 @@ class TimelineProxy:
     def get_name(self):
         return self._remote_invoke('get_name',(), {})
         
-    def get_sde(self):
-        objref = self._remote_invoke('get_sde',(), {})
+    def get_nde(self):
+        objref = self._remote_invoke('get_nde',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
     
