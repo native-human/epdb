@@ -244,12 +244,12 @@ class ServerTimeline:
     #    return resource
     
     def new_resource(self, type, location):
-        debug("NEW RESOURCE", type, location, self.name)
+        #debug("NEW RESOURCE", type, location, self.name)
         self.resources[(type, location)] = ServerDict()
         #debug("NEW1")
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
         #debug("NEW2")
-        debug("new resource:", self.name, type, enclocation)
+        #debug("new resource:", self.name, type, enclocation)
         return "resources." + self.name + "." + type + "." + enclocation
     
     def create_manager(self, identification, manager):
@@ -686,7 +686,7 @@ class TimelineProxy:
         return self._remote_invoke('get_snapshots',(), {})
         
     def get_resource(self, type, location):
-        debug('get_resource')
+        #debug('get_resource')
         objref = self._remote_invoke('get_resource',(type,location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
@@ -697,7 +697,7 @@ class TimelineProxy:
         return proxy
     
     def new_resource(self, type, location):
-        debug('new resource')
+        #debug('new resource')
         objref = self._remote_invoke('new_resource',(type, location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy

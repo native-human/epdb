@@ -70,7 +70,7 @@ class FileResourceManager:
         db = shelve.open(self.shelvename)
         db[id] = orig_open(self.filename).read()
         db.close()
-        print("SAVE done", id)
+        #print("SAVE done", id)
         return id
     
     def restore(self, id):

@@ -100,7 +100,7 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
                 #debug("nosuccess", sys.path)
                 #debug("nosuccess", name)
             else:
-                debug('Importing a module with patching', name)
+                #debug('Importing a module with patching', name)
                 for key in module.__dict__.keys():
                     if key == name:
                         continue
@@ -225,8 +225,8 @@ class Epdb(pdb.Pdb):
     
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
+        debug("make snapshot", dbg.ic, self.snapshot_id)
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
-        #debug("SNAPSHOT: ", snapshot)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
@@ -255,6 +255,7 @@ class Epdb(pdb.Pdb):
                 else:
                     dbg.mode = 'redo'
                 #debug("SET MODE TO: ", dbg.mode)
+    
                 return
         elif snapshot.activation_type == "stopatnocalls":
             "TODO"
@@ -265,14 +266,15 @@ class Epdb(pdb.Pdb):
             self.running_mode = 'next'
             return 1
         elif snapshot.activation_type == "continue":
-            #debug("Continue activation")
+            debug("Continue activation")
             self.set_continue()
             #self.set_step()
             self.running_mode = 'continue'
             dbg.mode = "redo"
             return 1
         else:
-            debug("Unknown activation type", snapshot.activation_type)
+            #debug("Unknown activation type", snapshot.activation_type)
+            # This typically happens if the snapshot is made
             pass
     
     #def precmd(self, line):
@@ -280,6 +282,7 @@ class Epdb(pdb.Pdb):
     #    return line
     def preprompt(self):
         debug("ic:", dbg.ic, "mode:", dbg.mode)
+    
     def preloop(self):
         self.preprompt()  
     
@@ -328,7 +331,7 @@ class Epdb(pdb.Pdb):
         self.cmdloop()
         
     def init_reversible(self):
-        debug('Init reversible')
+        #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
         from breakpoint import Breakpoint
@@ -382,7 +385,7 @@ class Epdb(pdb.Pdb):
     
     def set_resources(self):
         """Sets the resources for the actual position"""
-        debug("set resources")
+        #debug("set resources")
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             for i in range(dbg.ic, -1, -1):
@@ -397,7 +400,7 @@ class Epdb(pdb.Pdb):
                     else:
                         debug("Error: No key found for set resources")
                         return
-            debug("Key {0} for resource {1}".format(res, resource))
+            #debug("Key {0} for resource {1}".format(res, resource))
             #debug("k: ", k)
             manager = dbg.current_timeline.get_manager(k)
             #debug("manager: ", manager)
@@ -429,9 +432,23 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        debug("user_line",frame.f_code.co_filename)
+        #debug("user_line", frame.f_code.co_filename)
+        try:
+            lineno=frame.f_lineno
+        except:
+            lineno="err"
+        #debug("user line: ", dbg.ic, lineno)
+        # TODO only make snapshots in normal mode?
+        if dbg.snapshottingcontrol.get_make_snapshot():
+            r = self.make_snapshot()
+            #debug('interaction snapshot made or activated')
+            dbg.snapshottingcontrol.clear_make_snapshot()
+            if r:
+                if self.stopafter > 0:    # TODO this looks stupid
+                    self.stopafter -= 1
+                    
         self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
-        debug("lastline:", self.lastline)
+        #debug("lastline:", self.lastline)
         def setmode():
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
@@ -451,22 +468,24 @@ class Epdb(pdb.Pdb):
                 continued[(filename, lineno)] = [dbg.ic + 1]
         elif dbg.mode == 'replay' or dbg.mode == 'redo':
             # Here the resources are restored for the next instruction
-            debug("List resources")
-            resources = dbg.current_timeline.get_resources()
-            for k in resources:
-                # Its important here to use dbg.current_timeline.get_resource
-                # instead of resources[k] to get a DictProxy instead of a Serverdict
-                
-                #debug(k, resources[k], type(resources[k]))
-                #debug(k, dbg.current_timeline.get_resource(*k), type(dbg.current_timeline.get_resource(*k)))
-                
-                resource = dbg.current_timeline.get_resource(*k)
-                debug(resource)
-                debug(resource.get(dbg.ic), dbg.ic)
-                
-            debug("------")
+            # TODO what is done here?
+            pass
+            #debug("List resources")
+            #resources = dbg.current_timeline.get_resources()
+            #for k in resources:
+            #    # Its important here to use dbg.current_timeline.get_resource
+            #    # instead of resources[k] to get a DictProxy instead of a Serverdict
+            #    
+            #    #debug(k, resources[k], type(resources[k]))
+            #    #debug(k, dbg.current_timeline.get_resource(*k), type(dbg.current_timeline.get_resource(*k)))
+            #    
+            #    resource = dbg.current_timeline.get_resource(*k)
+            #    debug(resource)
+            #    debug(resource.get(dbg.ic), dbg.ic)
+            #    
+            #debug("------")
         
-        if self.running_mode == 'continue':
+        if self.running_mode == 'continue' and dbg.mode == 'normal':
             #debug("running mode continue")
             dbg.ic += 1
             if self.break_here(frame):
@@ -488,7 +507,7 @@ class Epdb(pdb.Pdb):
                 if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
                     return
                 self.make_snapshot()
-                debug('Main snapshot made or activated')
+                #debug('Main snapshot made or activated')
                 self._wait_for_mainpyfile = 0
             else:
                 dbg.ic += 1
@@ -515,7 +534,7 @@ class Epdb(pdb.Pdb):
                 setmode()
             
             if self.bp_commands(frame) and self.stopafter == -1 and self.running_mode != 'continue':
-                debug("Interaction")
+                #debug("Interaction")
                 self.interaction(frame, None)
             else:
                 #debug("No interaction", self.stopafter)
@@ -674,16 +693,6 @@ class Epdb(pdb.Pdb):
             dbg.current_timeline.deactivate(dbg.ic)
     
     def interaction(self, frame, traceback):
-        # TODO is this really correct? What happens if I jump over the
-        # command? Will a snapshot be made?
-        if dbg.snapshottingcontrol.get_make_snapshot():
-            r = self.make_snapshot()
-            debug('interaction snapshot made or activated')
-            dbg.snapshottingcontrol.clear_make_snapshot()
-            if r:
-                if self.stopafter > 0:    # TODO this looks stupid
-                    self.stopafter -= 1
-                return
         # Set all the resources before doing interaction
         self.set_resources()
         return pdb.Pdb.interaction(self, frame, traceback)

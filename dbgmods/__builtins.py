@@ -26,13 +26,13 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
     #else:
     #    builtins.__orig__print(os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename), sep=sep, end=end, file=file)
-    log.debug("PATCHED print")
+    #log.debug("PATCHED print")
     if dbg.mode == 'replay' or dbg.mode == 'redo':
-        log.debug('replay print')
+        #log.debug('replay print')
         # dbg.stdout_resource.set_restore()
         return None
     elif dbg.mode == 'normal':
-        log.debug('normal print')
+        #log.debug('normal print')
         s = io.StringIO()
         builtins.__orig__print(*args, sep=sep, end=end, file=s)
         dbg.stdout_resource_manager.update_stdout(s.getvalue())
