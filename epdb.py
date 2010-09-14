@@ -241,13 +241,13 @@ class Epdb(pdb.Pdb):
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
         if snapshot.activation_type == "step_forward":
-            debug("step forward activation", snapshot.step_forward)
+            # debug("step forward activation", snapshot.step_forward, dbg.ic)
             self.stopnocalls = None
             self.running_mode = "stopafter"
             if snapshot.step_forward > 0:
                 dbg.mode = 'replay'
-                self.stopafter = snapshot.step_forward + 1
-                debug("stopafter", self.stopafter)
+                self.stopafter = snapshot.step_forward
+                #debug("stopafter", self.stopafter)
                 return 1
             else:
                 if dbg.ic == dbg.current_timeline.get_max_ic():
@@ -255,31 +255,26 @@ class Epdb(pdb.Pdb):
                 else:
                     dbg.mode = 'redo'
                 #debug("SET MODE TO: ", dbg.mode)
-    
                 return
         elif snapshot.activation_type == "stopatnocalls":
             "TODO"
-            debug("STOPATNOCALLS", snapshot.nocalls)
+            #debug("STOPATNOCALLS", snapshot.nocalls)
             self.set_next(self.curframe)
             #self.set_step()
             self.stopnocalls = snapshot.nocalls
             self.running_mode = 'next'
             return 1
         elif snapshot.activation_type == "continue":
-            debug("Continue activation")
+            #debug("Continue activation", dbg.ic)
             self.set_continue()
             #self.set_step()
             self.running_mode = 'continue'
             dbg.mode = "redo"
             return 1
         else:
-            #debug("Unknown activation type", snapshot.activation_type)
             # This typically happens if the snapshot is made
-            pass
-    
-    #def precmd(self, line):
-    #    #debug("precommand")
-    #    return line
+            return 'snapshotmade'
+
     def preprompt(self):
         debug("ic:", dbg.ic, "mode:", dbg.mode)
     
@@ -339,8 +334,6 @@ class Epdb(pdb.Pdb):
         self.ron = True
         
         dbg.ic = 0
-        
-        self.starting_ic = None
         
         self.ss_ic = 0
         self.snapshot = None
@@ -428,27 +421,39 @@ class Epdb(pdb.Pdb):
         frame.f_locals['__exception__'] = exc_type, exc_value
         exc_type_name = exc_type.__name__
         print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
+        debug("exception interaction")
         self.interaction(frame, exc_traceback)
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        #debug("user_line", frame.f_code.co_filename)
+        debug("user_line", frame.f_code.co_filename)
+        dbg.ic += 1
         try:
             lineno=frame.f_lineno
         except:
             lineno="err"
         #debug("user line: ", dbg.ic, lineno)
         # TODO only make snapshots in normal mode?
+        
+        if self._wait_for_mainpyfile:
+            if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
+                return
+            dbg.ic = 0
+            r = self.make_snapshot()
+            self._wait_for_mainpyfile = 0
+            if r == 'snapshotmade':
+                debug("snapshotmade")
+                self.interaction(frame, None)
+                return
+            else:
+                debug("main snapshot activated")
+        
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
-            #debug('interaction snapshot made or activated')
+            debug('interaction snapshot made or activated', r)
             dbg.snapshottingcontrol.clear_make_snapshot()
-            if r:
-                if self.stopafter > 0:    # TODO this looks stupid
-                    self.stopafter -= 1
                     
         self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
-        #debug("lastline:", self.lastline)
         def setmode():
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
@@ -462,83 +467,43 @@ class Epdb(pdb.Pdb):
             continued = dbg.current_timeline.get_continue()
             try:
                 l = continued[(filename,lineno)]
-                l.append(dbg.ic+1)
+                l.append(dbg.ic)
                 continued[(filename, lineno)] = l
             except:
-                continued[(filename, lineno)] = [dbg.ic + 1]
-        elif dbg.mode == 'replay' or dbg.mode == 'redo':
-            # Here the resources are restored for the next instruction
-            # TODO what is done here?
-            pass
-            #debug("List resources")
-            #resources = dbg.current_timeline.get_resources()
-            #for k in resources:
-            #    # Its important here to use dbg.current_timeline.get_resource
-            #    # instead of resources[k] to get a DictProxy instead of a Serverdict
-            #    
-            #    #debug(k, resources[k], type(resources[k]))
-            #    #debug(k, dbg.current_timeline.get_resource(*k), type(dbg.current_timeline.get_resource(*k)))
-            #    
-            #    resource = dbg.current_timeline.get_resource(*k)
-            #    debug(resource)
-            #    debug(resource.get(dbg.ic), dbg.ic)
-            #    
-            #debug("------")
-        
-        if self.running_mode == 'continue' and dbg.mode == 'normal':
+                continued[(filename, lineno)] = [dbg.ic]
+                
+        if self.running_mode == 'continue':
             #debug("running mode continue")
-            dbg.ic += 1
-            if self.break_here(frame):
-                setmode()
-                self.interaction(frame, None)
+            if dbg.mode == 'normal':
+                if self.break_here(frame):
+                    setmode()
+                    debug("user_line interaction")
+                    self.interaction(frame, None)
         elif self.running_mode == 'next':
-            #debug("running mode next")
-            dbg.ic += 1
             if self.break_here(frame):
                 self.stopnocalls = None
                 setmode()
+                debug("user_line interaction")
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 setmode()
+                debug("user_line interaction")
                 self.interaction(frame, None)
-        else:
-            #debug("running mode else")
-            if self._wait_for_mainpyfile:
-                if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
-                    return
-                self.make_snapshot()
-                #debug('Main snapshot made or activated')
-                self._wait_for_mainpyfile = 0
-            else:
-                dbg.ic += 1
-            
-            if self.starting_ic is None:
-                if frame.f_code.co_filename == self.mainpyfile:
-                    self.starting_ic = dbg.ic
-                    #debug("starting ic: ", self.starting_ic)
-            
-            if self.stopafter > 0:
-                #debug('stopafter > 0', self.stopafter)
-                self.stopafter -= 1
-            
-            if self.stopafter == 0:
-                #debug('stopafter == 0')
-                self.stopafter = -1
+        elif self.running_mode == 'stopafter':
+            debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
+            if self.stopafter <= 0:
                 if dbg.current_timeline.get_max_ic() > dbg.ic:
                     dbg.mode = 'redo'
                 else:
-                    #debug("Set normal", dbg.current_timeline.get_max_ic(), dbg.ic)
                     dbg.mode = 'normal'
-                self.set_trace()
-            else:
-                setmode()
-            
-            if self.bp_commands(frame) and self.stopafter == -1 and self.running_mode != 'continue':
-                #debug("Interaction")
+                debug("stopafteruserline interaction")
                 self.interaction(frame, None)
             else:
-                #debug("No interaction", self.stopafter)
-                pass
+                self.stopafter -= 1
+                setmode()
+        else:
+            debug("running mode else")
+            self.interaction(frame, None)
         
     def user_call(self, frame, argument_list):
         #debug("user_call")
@@ -589,12 +554,14 @@ class Epdb(pdb.Pdb):
         except:
              debug('You need to supply an index, e.g. restore 0')
              return
+            
         self.mp.activatesp(id)
         raise EpdbExit()
     
-    def do_ude(self, arg):
-        """Shows the current ude. Debugging only."""
-        debug('ude:', dbg.ude)
+    def do_continued(self, arg):
+        continued = dbg.current_timeline.get_continue()
+        debug('continued: ',
+              continued)
     
     def do_nde(self, arg):
         """Shows the current nde. Debugging only."""
@@ -694,6 +661,7 @@ class Epdb(pdb.Pdb):
     
     def interaction(self, frame, traceback):
         # Set all the resources before doing interaction
+        self.running_mode = None
         self.set_resources()
         return pdb.Pdb.interaction(self, frame, traceback)
     
@@ -725,7 +693,7 @@ class Epdb(pdb.Pdb):
             return
         
         steps = dbg.ic - s.ic - 1
-        debug('snapshot activation', s.id, steps)
+        debug('snapshot activation', 'id:', s.id, 'steps:', steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
@@ -955,6 +923,7 @@ class Epdb(pdb.Pdb):
         else:
             frame.f_locals['__return__'] = return_value
             debug('--Return--')
+            debug("user_return interaction")
             self.interaction(frame, None)
     
     def dispatch_call(self, frame, arg):
@@ -1332,6 +1301,7 @@ def post_mortem(t=None):
                                                "exception is being handled")
 
     p = Epdb()
+
     p.reset()
     debug('post-mortem interaction')
     p.interaction(None, t)
@@ -1425,6 +1395,7 @@ def main():
             traceback.print_exc()
             print("Uncaught exception. Entering post mortem debugging")
             print("Running 'cont' or 'step' will restart the program")
+
             t = sys.exc_info()[2]
             epdb.interaction(None, t)
     

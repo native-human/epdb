@@ -41,14 +41,14 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
 def input(prompt=""):
-    log.debug("Patched input")
+    #log.debug("Patched input")
     caller = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     if caller in ['cmd.py']:
         return builtins.__orig__input(prompt)
     if dbg.mode == 'redo' or dbg.mode == 'replay':
         return None
     elif dbg.mode == 'normal':
-        log.debug("Caller: ", caller)
+        #log.debug("Caller: ", caller)
         dbg.snapshottingcontrol.set_make_snapshot()
         log.debug("expect input#")
         orig = builtins.__orig__input(prompt)
