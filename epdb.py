@@ -731,13 +731,14 @@ class Epdb(pdb.Pdb):
         
     def do_rnext(self, arg):
         """Reverse a next command."""
-        #debug(dbg.current_timeline.get_rnext())
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
             return
         
+        if dbg.mode == 'post_mortem':
+            self.do_rstep(arg)
+        
         if dbg.ic > dbg.current_timeline.get_max_ic():
-            #debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
