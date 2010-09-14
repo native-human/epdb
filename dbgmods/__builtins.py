@@ -40,6 +40,24 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
         dbg.stdout_resource[dbg.ic+1] = id
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
+def input(prompt=""):
+    log.debug("Patched input")
+    caller = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
+    if caller in ['cmd.py']:
+        return builtins.__orig__input(prompt)
+    if dbg.mode == 'redo' or dbg.mode == 'replay':
+        return None
+    elif dbg.mode == 'normal':
+        log.debug("Caller: ", caller)
+        dbg.snapshottingcontrol.set_make_snapshot()
+        log.debug("expect input#")
+        orig = builtins.__orig__input(prompt)
+        dbg.stdout_resource_manager.update_stdout(prompt + orig + '\r\n')
+        id = dbg.stdout_resource_manager.save()
+        dbg.stdout_resource[dbg.ic+1] = id
+        #log.debug("orig_input:", orig)
+        return orig
+
 class FileProxy:
     def __init__(self, file, args):
         self.__file__ = file
