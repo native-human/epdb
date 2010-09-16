@@ -63,14 +63,11 @@ class FileProxy:
         self.__file__ = file
         self._args = args
         file = args[0]
-        #log.debug("before _resource")
         self._resource = dbg.current_timeline.new_resource('file', file)
-        #log.debug("_resource worked")
         rm = resources.FileResourceManager(file)
-        #print("Try to create a manager")
-        dbg.current_timeline.create_manager(('file',file),rm)
+        self._fileresourcemanager = dbg.current_timeline.create_manager(('file',file),rm)
         #print("manager created -> try getting the manager")
-        self._fileresourcemanager = dbg.current_timeline.get_manager(('file',file))
+        #self._fileresourcemanager = dbg.current_timeline.get_manager(('file',file))
         #print("fileresourcemanager: ", self._fileresourcemanager)
         id = self._fileresourcemanager.save()
         self._resource[dbg.ic] = id
@@ -94,7 +91,7 @@ class FileProxy:
                 traceback.print_exc()
             return value
         
-        log.debug('Writing to the file descriptor')
+        #log.debug('Writing to the file descriptor')
         if dbg.mode == 'normal':
             return debug(self, b)
         elif dbg.mode == 'replay':
@@ -102,7 +99,7 @@ class FileProxy:
     
     def read(self, n=-1):
         def debug(self, n):
-            log.debug('reading from the file descriptor')
+            #log.debug('reading from the file descriptor')
             dbg.snapshottingcontrol.set_make_snapshot()
             value = self.__file__.read(n)
             return value
@@ -121,15 +118,13 @@ class FileProxy:
     
     def close(self):
         def debug(self):
-            log.debug('Doing close')
+            #log.debug('Doing close')
             self.__file__.close()
             id = self._fileresourcemanager.save()
             self._resource[dbg.ic+1] = id
         def replay(self):
             log.debug('Replaying close')
             self.__file__.close()
-        def undo():
-            log.debug('Undoing close')
         if dbg.mode == 'normal':
             return debug(self)
         elif dbg.mode == 'replay':
@@ -143,15 +138,15 @@ def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newli
     def undo(file, mode = "r", buffering = -1, encoding = None, errors = None, newline = None, closefd = True):
         pass
     def debug(file, mode = "r", buffering = -1, encoding = None, errors = None, newline = None, closefd = True):
-        log.debug('Debug open')
+        #log.debug('Debug open')
         fd = builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
-        log.debug("orig open worked")
+        #log.debug("orig open worked")
         args = (file, mode, buffering, encoding, errors, newline, closefd)
         fp = FileProxy(fd, args)
         return fp
     #log.debug("custom open")
     #log.debug('Caller:', os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename))
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'linecache.py']:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'linecache.py', 'resources.py']:
         #log.debug("internal open")
         return builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
     else:

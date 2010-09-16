@@ -6,8 +6,38 @@ import os.path
 import tempfile
 import dbg
 import builtins
+from fcntl import LOCK_SH, LOCK_EX, LOCK_UN, LOCK_NB
+import fcntl
 from uuid import uuid4
 from debug import debug
+
+
+def _close(self):
+    shelve.Shelf.close(self)
+    fcntl.flock(self.lckfile.fileno(), LOCK_UN)
+    self.lckfile.close()
+
+def safe_shelve_open(filename, flag='c', protocol=None, writeback=False, block=True, lckfilename=None):
+    """Open the sheve file, createing a lockfile at filename.lck.  If 
+    block is False then a IOError will be raised if the lock cannot
+    be acquired"""
+    if lckfilename == None:
+        lckfilename = filename + ".lck"
+    lckfile = open(lckfilename, 'w')
+
+    if flag == 'r':
+        lockflags = LOCK_SH
+    else:
+        lockflags = LOCK_EX
+    if not block:
+        lockflags |= LOCK_NB
+    fcntl.flock(lckfile.fileno(), lockflags)
+
+    shelf = shelve.open(filename, flag, protocol, writeback)
+    shelf.close = _close.__get__(shelf, shelve.Shelf)
+    shelf.lckfile = lckfile 
+    return shelf
+
 
 def orig_open(*args, **kargs):
     return builtins.__orig__open(*args, **kargs)
@@ -27,17 +57,23 @@ class StdoutResourceManager:
             
     def save(self):
         id = uuid4().hex
-        db = shelve.open(self.shelvename)
+        #db = shelve.open(self.shelvename)
+        debug("stdout save shelve open")
+        db = safe_shelve_open(self.shelvename)
         db[id] = self.stdout_cache
         db.close()
+        debug("stdout save shelve closed")
         return id
 
     def restore(self, id):
-        db = shelve.open(self.shelvename)
+        debug("stdout restore shelve open")
+        db = safe_shelve_open(self.shelvename)
         self.stdout_cache = db[id]
+        debug("stdout restore shelve closed")
+        db.close()
         debug("-->")
         debug(self.stdout_cache, prefix="#->", end='')
-        db.close()
+        
         
     def update_stdout(self, output):
         self.stdout_cache += output
@@ -67,17 +103,23 @@ class FileResourceManager:
     
     def save(self):
         id = uuid4().hex
-        db = shelve.open(self.shelvename)
+        debug("File save shelve open")
+        db = safe_shelve_open(self.shelvename)
         db[id] = orig_open(self.filename).read()
+        #debug("FILE SAVED", repr(db[id]))
         db.close()
+        debug("File save shelve closed")
         #print("SAVE done", id)
         return id
     
     def restore(self, id):
-        db = shelve.open(self.shelvename)
+        debug("File restore shelve open")
+        db = safe_shelve_open(self.shelvename)
         content = db[id]
         db.close()
+        debug("File restore shelve closed")
         #content = self.db[id]
+        debug('RESTORE CONTENT: ', repr(content),"ID", id)
         with orig_open(self.filename, 'w') as f:
             f.write(content)
         

@@ -426,7 +426,7 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        debug("user_line", frame.f_code.co_filename)
+        #debug("user_line", frame.f_code.co_filename)
         dbg.ic += 1
         try:
             lineno=frame.f_lineno
