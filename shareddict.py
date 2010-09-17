@@ -155,7 +155,7 @@ class ServerTimeline:
         debug('----')
         debug("maxic:", self.max_ic)
         debug("nextd: ", self.timelines.next_dict[self.name])
-    
+        
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
         ic the instruction count. ic is used to set the nde dictionary correctly"""
@@ -636,7 +636,7 @@ class TimelineProxy:
         objref = self._remote_invoke('copy',(name, ic), {})
         proxy = TimelineProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_name(self):
         return self._remote_invoke('get_name',(), {})
         

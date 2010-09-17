@@ -279,7 +279,7 @@ class Epdb(pdb.Pdb):
         debug("ic:", dbg.ic, "mode:", dbg.mode)
     
     def preloop(self):
-        self.preprompt()  
+        self.preprompt()
     
     def _runscript(self, filename):
         # The script has to run in __main__ namespace (or imports from
@@ -569,21 +569,22 @@ class Epdb(pdb.Pdb):
     
     def do_snapshots(self, arg):
         """Lists all snapshots"""
-        debug("id        ic")
-        debug("------------")
-        for k in self.snapshots.keys():
-            e = self.snapshots[k]
-            print(e.id, e.ic)
-        self.mp.list_snapshots()
+        
+        #debug("id        ic")
+        #debug("------------")
+        #for k in self.snapshots.keys():
+        #    e = self.snapshots[k]
+        #    print(e.id, e.ic)
+        #self.mp.list_snapshots()
 
     def do_resources(self, arg):
-        debug("Show resources")
+        debug("show resources#")
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
-            for rk in resource:
-                debug(" ", rk, resource[rk])
-            debug(k)
-        debug("------")
+            #for rk in resource:
+            #    debug(" ", rk, resource[rk])
+            debug('resource#', k[0],'#', k[1],'#',sep='')
+        #debug("------")
 
     def do_ic(self, arg):
         """Shows the current instruction count"""
@@ -592,6 +593,14 @@ class Epdb(pdb.Pdb):
     def do_timelines(self, arg):
         """List all timelines."""
         dbg.timelines.show()
+    
+    def do_timeline_snapshots(self, arg):
+        "List all snapshots for the timeline"
+        debug("timeline_snapshots#")
+        snapshots = dbg.current_timeline.get_snapshots()
+        for sid in snapshots:
+            e = self.snapshots[sid]
+            debug('tsnapshot#', e.id, '#', e.ic,'#',sep='') 
     
     def do_switch_timeline(self, arg):
         """Switch to another timeline"""
