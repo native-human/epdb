@@ -97,16 +97,6 @@ class ServerTimeline:
         else:
             timelines.ude_dict[name] = ServerDict()
             
-        #if rnext:
-        #    timelines.rnext_dict[name] = rnext
-        #else:
-        #    timelines.rnext_dict[name] = ServerDict()
-        #
-        #if rcontinue:
-        #    timelines.rcontinue_dict[name] = rcontinue
-        #else:
-        #    timelines.rcontinue_dict[name] = ServerDict()
-            
         if next:
             timelines.next_dict[name] = next
         else:
@@ -179,12 +169,18 @@ class ServerTimeline:
                 resources[(typ,location)] = resource
                 managers[(typ,location)] = oldmanagers[(typ,location)]
             
-        debug("resources", resources)
-        debug("managers", managers)
+        #debug("resources", resources)
+        #debug("managers", managers)
         #managers = {k:oldmanagers[k] for k in oldmanagers if k < ic}
-        copy = ServerTimeline(self.timelines, name, self.snapshots, nde=nde,
+        snapshots = []
+        for sid in self.snapshots:
+            sdata = self.timelines.snapshotdict[sid]
+            sic = sdata.ic
+            if sic <= ic:
+                snapshots.append(sid)
+        copy = ServerTimeline(self.timelines, name, snapshots, nde=nde,
                               ude=ude, resources=resources, managers=managers)
-        for k in self.snapshots:
+        for k in snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
         return "timeline." + name
