@@ -35,7 +35,7 @@ timelines = None
 current_timeline = None
 
 # The stdout resource
-stdout_resource = None
+#stdout_resource = None
 stdout_resource_manager = None
 
 # tempdir is the temporary file used by all the processes. tempdir is setted on startup.

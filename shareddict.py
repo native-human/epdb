@@ -112,6 +112,7 @@ class ServerTimeline:
             self.resources = resources
         else:
             self.resources = ServerDict()
+        #debug("new resource set:", self.resources, type(self.resources))
         timelines.resources_dict[name] = self.resources
         
         if managers:
@@ -158,16 +159,18 @@ class ServerTimeline:
         oldresources = self.timelines.resources_dict[self.name].copy()
         oldmanagers = self.timelines.managers_dict[self.name].copy()
         managers = {}
-        resources = {}
+        resources = ServerDict()
         for typ,location in oldresources:
             oldresource = oldresources[(typ,location)]
+            #debug("copy oldresource", oldresource)
             resource = ServerDict()
             for i in oldresource.copy():
-                if i < ic:
+                if i <= ic:
                     resource[i] = oldresource[i]
             if resource != {}:
                 resources[(typ,location)] = resource
                 managers[(typ,location)] = oldmanagers[(typ,location)]
+            #debug("resource:", resource)
             
         #debug("resources", resources)
         #debug("managers", managers)
@@ -498,7 +501,7 @@ class DictProxy:
     def __setitem__(self, idx, value):
         return self._remote_invoke('__setitem__', (idx, value), {})
         
-    def __iter__(self): 
+    def __iter__(self):
         return self._remote_invoke('__iter__',(), {}).__iter__()
 
     def __contains__(self, k):

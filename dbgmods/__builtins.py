@@ -29,7 +29,6 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
     #log.debug("PATCHED print")
     if dbg.mode == 'replay' or dbg.mode == 'redo':
         #log.debug('replay print')
-        # dbg.stdout_resource.set_restore()
         return None
     elif dbg.mode == 'normal':
         #log.debug('normal print')
@@ -37,7 +36,7 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
         builtins.__orig__print(*args, sep=sep, end=end, file=s)
         dbg.stdout_resource_manager.update_stdout(s.getvalue())
         id = dbg.stdout_resource_manager.save()
-        dbg.stdout_resource[dbg.ic+1] = id
+        dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic+1] = id
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
 def input(prompt=""):
@@ -54,7 +53,7 @@ def input(prompt=""):
         orig = builtins.__orig__input(prompt)
         dbg.stdout_resource_manager.update_stdout(prompt + orig + '\r\n')
         id = dbg.stdout_resource_manager.save()
-        dbg.stdout_resource[dbg.ic+1] = id
+        dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic+1] = id
         #log.debug("orig_input:", orig)
         return orig
 

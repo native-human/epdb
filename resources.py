@@ -57,19 +57,21 @@ class StdoutResourceManager:
             
     def save(self):
         id = uuid4().hex
+        #debug("stdout save id: ", id)
         #db = shelve.open(self.shelvename)
-        debug("stdout save shelve open")
+        #debug("stdout save shelve open")
         db = safe_shelve_open(self.shelvename)
         db[id] = self.stdout_cache
         db.close()
-        debug("stdout save shelve closed")
+        #debug("stdout  save shelve closed")
         return id
 
     def restore(self, id):
-        debug("stdout restore shelve open")
+        #debug("stdout restore id:", id)
+        #debug("stdout restore shelve open")
         db = safe_shelve_open(self.shelvename)
         self.stdout_cache = db[id]
-        debug("stdout restore shelve closed")
+        #debug("stdout restore shelve closed")
         db.close()
         debug("-->")
         debug(self.stdout_cache, prefix="#->", end='')

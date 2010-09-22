@@ -257,7 +257,6 @@ class Epdb(pdb.Pdb):
                 #debug("SET MODE TO: ", dbg.mode)
                 return
         elif snapshot.activation_type == "stopatnocalls":
-            "TODO"
             #debug("STOPATNOCALLS", snapshot.nocalls)
             self.set_next(self.curframe)
             #self.set_step()
@@ -365,12 +364,12 @@ class Epdb(pdb.Pdb):
         self.breaks = shareddict.DictProxy('breaks')
         self.snapshots = shareddict.DictProxy('snapshots')
         
-        dbg.stdout_resource = dbg.current_timeline.new_resource('__stdout__', '')
+        dbg.current_timeline.new_resource('__stdout__', '')
         dbg.stdout_resource_manager = resources.StdoutResourceManager()
         dbg.current_timeline.create_manager(('__stdout__', ''), dbg.stdout_resource_manager)
         self.stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
         id = self.stdout_manager.save()
-        dbg.stdout_resource[dbg.ic] = id  
+        dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic] = id
     
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
@@ -378,7 +377,8 @@ class Epdb(pdb.Pdb):
     
     def set_resources(self):
         """Sets the resources for the actual position"""
-        #debug("set resources")
+        debug("set resources")
+        debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             for i in range(dbg.ic, -1, -1):
@@ -459,7 +459,7 @@ class Epdb(pdb.Pdb):
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
 
-        lineno = frame.f_lineno     # TODO extend with filename so to support different files
+        lineno = frame.f_lineno
         filename = frame.f_code.co_filename
         filename = self.canonic(filename)
         
@@ -583,7 +583,10 @@ class Epdb(pdb.Pdb):
             resource = dbg.current_timeline.get_resource(*k)
             #for rk in resource:
             #    debug(" ", rk, resource[rk])
+            #debug("Resource: ", resource)
             debug('resource#', k[0],'#', k[1],'#',sep='')
+            for rid in resource:
+                debug('resource_entry#', k[0],'#', k[1],'#',rid,'#', resource[rid],'#', sep='')
         #debug("------")
 
     def do_ic(self, arg):
@@ -643,10 +646,6 @@ class Epdb(pdb.Pdb):
         self.mp.quit()
         self.set_quit()
         return 1
-    
-    def do_replay(self, arg):
-        """Debugging only. TODO remove if not needed anymore"""
-        dbg.mode = 'replay'
     
     def do_mode(self, arg):
         """Shows the current mode."""
@@ -830,7 +829,6 @@ class Epdb(pdb.Pdb):
                 # The next command has to switch to normal mode at some point
                 # Use the highest available snapshot
                 #debug("mode switch next")
-                #self.highestsnapshot() # TODO
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
                     #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
