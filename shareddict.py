@@ -243,8 +243,13 @@ class ServerTimeline:
     #    return resource
     
     def new_resource(self, type, location):
+        """Creates a new resource if it does not exist"""
         #debug("NEW RESOURCE", type, location, self.name)
-        self.resources[(type, location)] = ServerDict()
+        if not (type, location) in self.resources:
+            debug("Create new resource: ", type, location)
+            self.resources[(type, location)] = ServerDict()
+        else:
+            debug("Don't create new resource, because it already exists: ", type, location)
         #debug("NEW1")
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
         #debug("NEW2")

@@ -378,7 +378,7 @@ class Epdb(pdb.Pdb):
     def set_resources(self):
         """Sets the resources for the actual position"""
         debug("set resources")
-        debug("r: ", dbg.current_timeline.get_resources())
+        #debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             for i in range(dbg.ic, -1, -1):

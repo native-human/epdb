@@ -61,14 +61,14 @@ class Breakpoint:
     def deleteMe(self):
         index = (self.file, self.line)
         self.bpbynumber[self.number] = None   # No longer in list
-        debug("remove called on", self.bplist[index])
+        #debug("remove called on", self.bplist[index])
         l = self.bplist[index]
         l.remove(self)
         self.bplist[index] = l
         #self.bplist[index].remove(self)
         if not self.bplist[index]:
             # No more bp for this f:l combo
-            debug('call dell on ', self.bplist)
+            #debug('call dell on ', self.bplist)
             del self.bplist[index]
 
     def enable(self):

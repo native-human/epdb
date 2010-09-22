@@ -105,12 +105,12 @@ class FileResourceManager:
     
     def save(self):
         id = uuid4().hex
-        debug("File save shelve open")
+        #debug("File save shelve open")
         db = safe_shelve_open(self.shelvename)
         db[id] = orig_open(self.filename).read()
-        #debug("FILE SAVED", repr(db[id]))
+        debug("FILE SAVED", repr(db[id]))
         db.close()
-        debug("File save shelve closed")
+        #debug("File save shelve closed")
         #print("SAVE done", id)
         return id
     

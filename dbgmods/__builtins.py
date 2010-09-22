@@ -61,15 +61,21 @@ class FileProxy:
     def __init__(self, file, args):
         self.__file__ = file
         self._args = args
-        file = args[0]
-        self._resource = dbg.current_timeline.new_resource('file', file)
-        rm = resources.FileResourceManager(file)
-        self._fileresourcemanager = dbg.current_timeline.create_manager(('file',file),rm)
+        self.file = args[0]
+        log.debug('FILE INIT worked')
+        #self._resource = dbg.current_timeline.new_resource('file', file)
+        dbg.current_timeline.new_resource('file', self.file)
+        rm = resources.FileResourceManager(self.file)
+        self._fileresourcemanager = dbg.current_timeline.create_manager(('file',self.file),rm)
         #print("manager created -> try getting the manager")
         #self._fileresourcemanager = dbg.current_timeline.get_manager(('file',file))
         #print("fileresourcemanager: ", self._fileresourcemanager)
         id = self._fileresourcemanager.save()
-        self._resource[dbg.ic] = id
+        resource = dbg.current_timeline.get_resource("file", self.file)
+        if not dbg.ic in resource:
+            resource[dbg.ic] = id
+        #dbg.current_timeline.get_resource('file', self.file)[dbg.ic] = id
+        #self._resource[dbg.ic] = id
         
     def write(self, b):
         def replay(self, b):
@@ -84,9 +90,12 @@ class FileProxy:
             try:
                 value = self.__file__.write(b)
                 id = self._fileresourcemanager.save()
-                self._resource[dbg.ic+1] = id
+                #dbg.current_timeline.get_resource('file', self.__file__)[dbg.ic] = id
+                #self._resource[dbg.ic+1] = id
+                dbg.current_timeline.get_resource('file', self.file)[dbg.ic+1] = id
                 dbg.snapshottingcontrol.set_make_snapshot()
             except:
+                log.debug("ERROR")
                 traceback.print_exc()
             return value
         
@@ -120,7 +129,8 @@ class FileProxy:
             #log.debug('Doing close')
             self.__file__.close()
             id = self._fileresourcemanager.save()
-            self._resource[dbg.ic+1] = id
+            #self._resource[dbg.ic+1] = id
+            dbg.current_timeline.get_resource('file', self.file)[dbg.ic+1] = id
         def replay(self):
             log.debug('Replaying close')
             self.__file__.close()
