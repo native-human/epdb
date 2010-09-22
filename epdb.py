@@ -1001,6 +1001,7 @@ class Epdb(pdb.Pdb):
 
     def clear_break(self, filename, lineno):
         from breakpoint import Breakpoint
+        debug("Clear Break")
         filename = self.canonic(filename)
         if not filename in self.breaks:
             return 'There are no breakpoints in %s' % filename
@@ -1010,9 +1011,14 @@ class Epdb(pdb.Pdb):
         # If there's only one bp in the list for that file,line
         # pair, then remove the breaks entry
         for bp in Breakpoint.bplist[filename, lineno][:]:
+            debug("delete Me")
             bp.deleteMe()
         if (filename, lineno) not in Breakpoint.bplist:
-            self.breaks[filename].remove(lineno)
+            debug("delete self.breaks")
+            l = self.breaks[filename]
+            l.remove(lineno)
+            self.breaks[filename] = l
+            #self.breaks[filename].remove(lineno)
         if not self.breaks[filename]:
             del self.breaks[filename]
 
@@ -1076,6 +1082,12 @@ class Epdb(pdb.Pdb):
     def get_all_breaks(self):
         return self.breaks
     
+    def do_show_break(self, arg):
+        from breakpoint import Breakpoint
+        debug("Breakpoint by number: ", Breakpoint.bpbynumber)
+        debug("Breakpoint list: ", Breakpoint.bplist)
+        debug("self.breaks: ", self.breaks)
+        
     def do_break(self, arg, temporary = 0):
         from breakpoint import Breakpoint
         # break [ ([filename:]lineno | function) [, "condition"] ]
