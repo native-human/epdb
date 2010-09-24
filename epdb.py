@@ -18,6 +18,7 @@ import configparser
 import shareddict
 import tempfile
 import resources
+import time
 from debug import debug
 from reprlib import Repr
 
@@ -361,6 +362,9 @@ class Epdb(pdb.Pdb):
         
         self.is_postmortem = False
         
+        self.starttime = None
+        self.runningtime = 0
+        
         self.breaks = shareddict.DictProxy('breaks')
         self.snapshots = shareddict.DictProxy('snapshots')
         
@@ -426,7 +430,10 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        #debug("user_line", frame.f_code.co_filename)
+        actualtime = time.time()
+        if self.starttime:
+            self.runningtime += actualtime - self.starttime
+        #debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
         dbg.ic += 1
         try:
             lineno=frame.f_lineno
@@ -450,9 +457,14 @@ class Epdb(pdb.Pdb):
         
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
-            debug('interaction snapshot made or activated', r)
+            #debug('interaction snapshot made or activated', r)
             dbg.snapshottingcontrol.clear_make_snapshot()
-                    
+            self.runningtime = 0
+        elif self.runningtime >= 1 and dbg.mode == 'normal':
+            #debug("Make snapshot because of running time")
+            r = self.make_snapshot()
+            self.runningtime = 0
+            
         self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
         def setmode():
             if dbg.mode == 'redo':
@@ -504,6 +516,7 @@ class Epdb(pdb.Pdb):
         else:
             debug("running mode else")
             self.interaction(frame, None)
+        self.starttime = time.time()
         
     def user_call(self, frame, argument_list):
         #debug("user_call")
