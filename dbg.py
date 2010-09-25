@@ -1,20 +1,13 @@
 #!/usr/bin/env python
-#from multiprocessing.managers import BaseManager
-#from multiprocessing.managers import BaseProxy
 import os
-#import multiprocessing.util
+import os.path
+import sys
+import _thread
 
-#multiprocessing.util.log_to_stderr()
-
-#class IdGenerator:
-#    def __init__(self):
-#        self.id = 0
-#    def newid(self):
-#        r = self.id
-#        self.id += 1
-#        return r
-#    
-#idgenerator = IdGenerator()
+def is_dbg_callee():
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py']:
+        return True
+    return False
 
 class SnapshottingControl:
     def __init__(self):
@@ -62,114 +55,3 @@ modules = []
 
 ic = 0
 # maximum ic in current timeline.
-
-#server_n
-de = {}
-#server_ude = {}
-
-#dict = None
-
-#class DictManager(BaseManager):
-#    pass
-#
-#def get_nde():
-#    return server_nde
-
-
-#DictManager.register('get_ude', callable=lambda:server_ude, proxytype=DictProxy)
-#
-#def start_server():
-#    class DictProxy(BaseProxy):
-#        _exposed_ = ['__getitem__', '__setitem__','__str__','__repr__']
-#        def __getitem__(self, value):
-#            ret = self._callmethod('__getitem__',(value,))
-#            return ret
-#        def __setitem__(self, idx, value):
-#            self._callmethod('__setitem__',(value,))
-#        def __repr__(self):
-#            return self._callmethod('__repr__')
-#        def __str__(self):
-#            return self._callmethod('__str__')
-#    
-#    d = {}
-#    def getdict():
-#        return d
-#    
-#    if os.fork():
-#        class DictManager(BaseManager):
-#            pass
-#        DictManager.register('dict', getdict, proxytype=DictProxy)
-#        m = DictManager(address=('', 50000), authkey=b'epdb')
-#        s = m.get_server()
-#        s.serve_forever()
-#        sys.exit(0)    
-#    
-#def connect():
-#    global manager
-#    global dict
-#    DictManager.register('dict')
-#    #dict = m.get_dict()
-#    #dict[123] = {}
-#    manager = DictManager(address=('localhost', 50000), authkey=b'epdb')
-#    manager.connect()
-#    dict = manager.dict()
-#    
-#if __name__ == '__main__':   
-#    import sys
-#    import os
-#    import time
-#    from multiprocessing.managers import BaseManager
-#    from multiprocessing.managers import BaseProxy
-#    
-#    start_server()
-#    
-#    #class DictProxy(BaseProxy):
-#    #    _exposed_ = ['__getitem__', '__setitem__','__str__','__repr__']
-#    #    def __getitem__(self, value):
-#    #        ret = self._callmethod('__getitem__',(value,))
-#    #        return ret
-#    #    def __setitem__(self, idx, value):
-#    #        self._callmethod('__setitem__',(value,))
-#    #    def __repr__(self):
-#    #        return self._callmethod('__repr__')
-#    #    def __str__(self):
-#    #        return self._callmethod('__str__')
-#    #
-#    #d = {}
-#    #def getdict():
-#    #    return d
-#    #
-#    #if os.fork():
-#    #    class DictManager(BaseManager):
-#    #        pass
-#    #    DictManager.register('dict', getdict, proxytype=DictProxy)
-#    #    m = DictManager(address=('', 50000), authkey=b'epdb')
-#    #    s = m.get_server()
-#    #    s.serve_forever()
-#    #    sys.exit(0)
-#    
-#    time.sleep(0.5)
-#    #
-#    DictManager.register('dict')
-#    #dict = m.get_dict()
-#    #dict[123] = {}
-#    manager = DictManager(address=('localhost', 50000), authkey=b'epdb')
-#    manager.connect()
-#    nde = manager.dict()
-#    #connect()
-
-#    if os.fork():
-#        nde[1] = 'hallo Welt'
-#        nde[2] = 'Number2'
-#        time.sleep(3)
-#    else:
-#        #connect()
-#        #del m
-#        #del nde
-#        time.sleep(1)
-#        manager = DictManager(address=('localhost', 50000), authkey=b'epdb')
-#        manager.connect()
-#        nde = manager.dict()
-#        time.sleep(0.5)
-#        nde[3] = 'Blah'
-#        print('done', nde, nde[1])
