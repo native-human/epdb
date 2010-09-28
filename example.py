@@ -1,5 +1,7 @@
 import random
 
+j = 1
+
 for i in range(1):
     random.seed()
     print(random.randint(0,10))

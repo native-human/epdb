@@ -323,7 +323,8 @@ class Epdb(pdb.Pdb):
         dbg.mode = "post_mortem"
         self.set_resources()
         self.is_postmortem=True
-        self.cmdloop()
+        #self.cmdloop()
+        self.interaction(self.lastframe, None)
         
     def init_reversible(self):
         #debug('Init reversible')
@@ -408,7 +409,7 @@ class Epdb(pdb.Pdb):
             
     def do_p(self, arg):
         try:
-            debug("var#", arg, "|||", repr(self._getval(arg)))
+            debug("var#", arg, "#", repr(self._getval(arg)),'#', sep='')
         except:
             debug("varerror#", arg)
     # make "print" an alias of "p" since print isn't a Python statement anymore
@@ -430,6 +431,11 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
+        if hasattr(self, 'lastframe'):
+            del self.lastframe
+        self.lastframe = frame
+        #debug('lastframe', self.lastframe.f_globals.get('__name__'))
+        
         actualtime = time.time()
         if self.starttime:
             self.runningtime += actualtime - self.starttime
@@ -1336,7 +1342,9 @@ def post_mortem(t=None):
 
     p.reset()
     debug('post-mortem interaction')
-    p.interaction(None, t)
+    frame = sys._current_frames()[_thread.get_ident()]
+    debug("Post mortem wit frame:", frame)
+    p.interaction(frame, t)
 
 def pm():
     post_mortem(sys.last_traceback)
@@ -1403,7 +1411,9 @@ def main():
             print("Uncaught exception. Entering post mortem debugging")
             print("Running 'cont' or 'step' will restart the program")
             t = sys.exc_info()[2]
-            epdb.interaction(None, t)
+            frame = sys._current_frames()[_thread.get_ident()]
+            debug("SystemExit exception. Frame:", frame)
+            epdb.interaction(frame, t)
         except EpdbExit:
             debug('EpdbExit caught')
             break
@@ -1428,8 +1438,10 @@ def main():
             print("Uncaught exception. Entering post mortem debugging")
             print("Running 'cont' or 'step' will restart the program")
 
+            frame = sys._current_frames()[_thread.get_ident()]
+            debug("Other exception. Frame:", frame)
             t = sys.exc_info()[2]
-            epdb.interaction(None, t)
+            epdb.interaction(frame, t)
     
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
