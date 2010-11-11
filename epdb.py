@@ -38,7 +38,7 @@ def readconfig():
     except:
         dbgmods = '/home/patrick/myprogs/epdb/dbgmods'
     dbgpath = dbgmods
-    debug("dbgmods", dbgmods)
+    #debug("dbgmods", dbgmods)
     if not dbgmods in sys.path:
         sys.path.append(dbgmods)
 
@@ -226,7 +226,7 @@ class Epdb(pdb.Pdb):
     
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
-        debug("make snapshot", dbg.ic, self.snapshot_id)
+        #fdebug("make snapshot", dbg.ic, self.snapshot_id)
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
@@ -319,7 +319,7 @@ class Epdb(pdb.Pdb):
         if self._user_requested_quit:
             return
         debug("Program has finished")
-        debug("Going into post-mortem interaction mode", dbg.ic)
+        #debug("Going into post-mortem interaction mode", dbg.ic)
         dbg.mode = "post_mortem"
         self.set_resources()
         self.is_postmortem=True
@@ -382,7 +382,7 @@ class Epdb(pdb.Pdb):
     
     def set_resources(self):
         """Sets the resources for the actual position"""
-        debug("set resources")
+        #debug("set resources")
         #debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
@@ -455,11 +455,12 @@ class Epdb(pdb.Pdb):
             r = self.make_snapshot()
             self._wait_for_mainpyfile = 0
             if r == 'snapshotmade':
-                debug("snapshotmade")
+                #debug("snapshotmade")
                 self.interaction(frame, None)
                 return
             else:
-                debug("main snapshot activated")
+                pass
+                #debug("main snapshot activated")
         
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
@@ -473,6 +474,7 @@ class Epdb(pdb.Pdb):
             
         self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
         def setmode():
+            debug("setmode: ", dbg.ic, dbg.current_timeline.get_max_ic())
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
@@ -501,26 +503,29 @@ class Epdb(pdb.Pdb):
             if self.break_here(frame):
                 self.stopnocalls = None
                 setmode()
-                debug("user_line interaction")
+                #debug("user_line interaction")
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 setmode()
-                debug("user_line interaction")
+                #debug("user_line interaction")
                 self.interaction(frame, None)
+        elif self.running_mode == 'step':
+            setmode()
+            self.interaction(frame, None)
         elif self.running_mode == 'stopafter':
-            debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
+            #debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
             if self.stopafter <= 0:
                 if dbg.current_timeline.get_max_ic() > dbg.ic:
                     dbg.mode = 'redo'
                 else:
                     dbg.mode = 'normal'
-                debug("stopafteruserline interaction")
+                #debug("stopafteruserline interaction")
                 self.interaction(frame, None)
             else:
                 self.stopafter -= 1
                 setmode()
         else:
-            debug("running mode else")
+            #debug("running mode else")
             self.interaction(frame, None)
         self.starttime = time.time()
         
@@ -1006,7 +1011,7 @@ class Epdb(pdb.Pdb):
         import linecache # Import as late as possible
         line = linecache.getline(filename, lineno)
         if not line:
-            debug("END")
+            #debug("END")
             return 'Line %s:%d does not exist' % (filename,
                                    lineno)
         if not filename in self.breaks:
@@ -1016,7 +1021,7 @@ class Epdb(pdb.Pdb):
             list.append(lineno)
             self.breaks[filename] = list  # This is necessary for the distributed application
         bp = Breakpoint(filename, lineno, temporary, cond, funcname)
-        debug('END')
+        #debug('END')
 
     def clear_break(self, filename, lineno):
         from breakpoint import Breakpoint
@@ -1040,6 +1045,7 @@ class Epdb(pdb.Pdb):
             #self.breaks[filename].remove(lineno)
         if not self.breaks[filename]:
             del self.breaks[filename]
+        debug("self.breaks: ", self.breaks)
 
 
     def clear_bpbynumber(self, arg):

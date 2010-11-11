@@ -246,7 +246,7 @@ class ServerTimeline:
         """Creates a new resource if it does not exist"""
         #debug("NEW RESOURCE", type, location, self.name)
         if not (type, location) in self.resources:
-            debug("Create new resource: ", type, location)
+            #debug("Create new resource: ", type, location)
             self.resources[(type, location)] = ServerDict()
         else:
             debug("Don't create new resource, because it already exists: ", type, location)
