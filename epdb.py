@@ -494,10 +494,12 @@ class Epdb(pdb.Pdb):
                 
         if self.running_mode == 'continue':
             #debug("running mode continue")
+            if dbg.mode == 'redo':
+                setmode()
             if dbg.mode == 'normal':
                 if self.break_here(frame):
                     setmode()
-                    debug("user_line interaction")
+                    #debug("user_line interaction")
                     self.interaction(frame, None)
         elif self.running_mode == 'next':
             if self.break_here(frame):
@@ -901,13 +903,19 @@ class Epdb(pdb.Pdb):
             #debug("Continue in redo mode")
             bestic = self.findnextbreakpointic()
             if bestic == -1:
-                #debug("No future bp in executed instructions found")
+                #debug("redo_cont: No future bp in executed instructions found")
                 # go to the highest snapshot and continue
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
-                self.mp.activatecontinue(s.id)
-                raise EpdbExit()
+                #debug("current_ic", dbg.ic, "snapshot_ic", s.ic)
+                if dbg.ic < s.ic:
+                    #debug("activate continue")
+                    self.mp.activatecontinue(s.id)
+                    raise EpdbExit()
+                else:
+                    pass
+                    #debug("normal continue")
             else:
-                #debug("Breakpoint found", bestic)
+                #debug("redo_cont: Breakpoint found", bestic)
                 # find snapshot and continue
                 s = self.findsnapshot(bestic)
                 self.mp.activatesp(s.id, bestic - s.ic)
