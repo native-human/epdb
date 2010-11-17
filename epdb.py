@@ -474,7 +474,7 @@ class Epdb(pdb.Pdb):
             
         self.lastline = "> {filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
         def setmode():
-            debug("setmode: ", dbg.ic, dbg.current_timeline.get_max_ic())
+            #debug("setmode: ", dbg.ic, dbg.current_timeline.get_max_ic())
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
@@ -502,13 +502,13 @@ class Epdb(pdb.Pdb):
                     #debug("user_line interaction")
                     self.interaction(frame, None)
         elif self.running_mode == 'next':
+            setmode()
             if self.break_here(frame):
                 self.stopnocalls = None
-                setmode()
                 #debug("user_line interaction")
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
-                setmode()
+                #setmode()
                 #debug("user_line interaction")
                 self.interaction(frame, None)
         elif self.running_mode == 'step':
