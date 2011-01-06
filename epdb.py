@@ -64,7 +64,7 @@ def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
         pass
         #debug("Failed importing __builtins", sys.path)
     else:
-        #debug('Importing __builtins with patching', name)
+        #debug('Importing __builtins with patching', name, module.__dict__.keys())
         for key in module.__dict__.keys():
             if key == name:
                 continue
@@ -89,11 +89,11 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
     if name in dbg.modules:
         new = False
     mod = __pythonimport__(name, globals, locals, fromlist, level)
-    
     if new:
         dbg.modules.append(name)
         if name[:2] != '__':
             try:
+                #debug("try import  __", name, sep="")
                 module = __pythonimport__('__'+name, globals, locals, fromlist)
                 #debug("success")
             except ImportError:
@@ -101,10 +101,10 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
                 #debug("nosuccess", sys.path)
                 #debug("nosuccess", name)
             else:
-                #debug('Importing a module with patching', name)
+                debug('Importing a module with patching', name)
                 for key in module.__dict__.keys():
-                    if key == name:
-                        continue
+                    #if key == name:
+                    #    continue
                     if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
                         continue
                     
@@ -132,7 +132,7 @@ class SnapshotData:
 
 class Epdb(pdb.Pdb):
     def __init__(self):
-        pdb.Pdb.__init__(self, skip=['random', 'debug', 'fnmatch', 'epdb',
+        pdb.Pdb.__init__(self, skip=['random', 'time', 'debug', 'fnmatch', 'epdb',
                 'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
                 'codecs', 'types', 'io', 'builtins', 'ctypes', 'linecache',
                 'uuid', 'shelve', 'collections', 'tempfile', '_thread',
@@ -276,7 +276,9 @@ class Epdb(pdb.Pdb):
             return 'snapshotmade'
 
     def preprompt(self):
+        t = time.time()
         debug("ic:", dbg.ic, "mode:", dbg.mode)
+        debug("time:", t-self.command_running_start_time)
     
     def preloop(self):
         self.preprompt()
@@ -327,6 +329,7 @@ class Epdb(pdb.Pdb):
         self.interaction(self.lastframe, None)
         
     def init_reversible(self):
+        self.command_running_start_time = time.time()
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
@@ -831,6 +834,7 @@ class Epdb(pdb.Pdb):
         else:
             self.set_step()
             self.running_mode = 'step'
+            self.command_running_start_time = time.time()
             return 1
     do_s = do_step # otherwise the pdb impl is called
         
@@ -892,6 +896,7 @@ class Epdb(pdb.Pdb):
                 self.mp.activatesp(s.id, s.ic - nextic)
                 raise EpdbExit()            
         else:
+            self.command_running_start_time = time.time()
             return pdb.Pdb.do_next(self, arg)
     do_n = do_next
     
@@ -920,6 +925,7 @@ class Epdb(pdb.Pdb):
                 s = self.findsnapshot(bestic)
                 self.mp.activatesp(s.id, bestic - s.ic)
                 raise EpdbExit()
+        self.command_running_start_time = time.time()
         return pdb.Pdb.do_continue(self, arg)
     do_c = do_cont = do_continue
         
