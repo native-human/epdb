@@ -1,0 +1,8 @@
+Package: epdb
+Version: 0.1-1
+Section: base
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.1.3-3)
+Maintainer: Patrick Sabin <patricksabin@gmx.at>
+Description: A reversible debugger for python.
