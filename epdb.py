@@ -424,12 +424,12 @@ class Epdb(pdb.Pdb):
     def user_exception(self, frame, exc_info):
         """This function is called if an exception occurs,
         but only if we are to stop at or just below this level."""
-        debug("EXCEPTION")
         exc_type, exc_value, exc_traceback = exc_info
         frame.f_locals['__exception__'] = exc_type, exc_value
         exc_type_name = exc_type.__name__
         print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
-        debug("exception interaction")
+        if exc_type == SyntaxError:
+            debug("syntax_error", exc_value[1][0], exc_value[1][1], '', sep='#')
         self.interaction(frame, exc_traceback)
     
     def user_line(self, frame):
