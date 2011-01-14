@@ -278,7 +278,11 @@ class Epdb(pdb.Pdb):
     def preprompt(self):
         t = time.time()
         debug("ic:", dbg.ic, "mode:", dbg.mode)
-        debug("time:", t-self.command_running_start_time)
+        if self.command_running_start_time:
+            debug("time:", t-self.command_running_start_time)
+        else:
+            debug("time: ")
+        self.command_running_start_time = None
     
     def preloop(self):
         self.preprompt()
@@ -329,7 +333,8 @@ class Epdb(pdb.Pdb):
         self.interaction(self.lastframe, None)
         
     def init_reversible(self):
-        self.command_running_start_time = time.time()
+        #self.command_running_start_time = time.time()
+        self.command_running_start_time = None
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
@@ -925,7 +930,8 @@ class Epdb(pdb.Pdb):
                 s = self.findsnapshot(bestic)
                 self.mp.activatesp(s.id, bestic - s.ic)
                 raise EpdbExit()
-        self.command_running_start_time = time.time()
+        else:
+            self.command_running_start_time = time.time()
         return pdb.Pdb.do_continue(self, arg)
     do_c = do_cont = do_continue
         
