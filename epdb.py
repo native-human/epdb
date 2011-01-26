@@ -977,6 +977,32 @@ class Epdb(pdb.Pdb):
             debug("user_return interaction")
             self.interaction(frame, None)
     
+    def do_activate_snapshot(self, arg):
+        """Steps one step backwards"""
+
+        if not self.ron:
+            debug("You are not in reversible mode. You can enable it with 'ron'.")
+            return
+
+        if dbg.ic > dbg.current_timeline.get_max_ic():
+            dbg.current_timeline.set_max_ic(dbg.ic)
+
+        actual_ic = dbg.ic
+        snapshots = dbg.current_timeline.get_snapshots()
+        for sid in snapshots:
+            s = self.snapshots[sid]
+            print(repr(s.id), repr(arg))
+            if s.id == int(arg):
+                break
+        else:
+            debug("Snapshot not found in timeline")
+            return
+
+        steps = 0
+        debug('snapshot activation', 'id:', s.id, 'steps:', steps)
+        self.mp.activatesp(s.id, steps)
+        raise EpdbExit()
+
     def dispatch_call(self, frame, arg):
         # XXX 'arg' is no longer used
         if self.botframe is None:
