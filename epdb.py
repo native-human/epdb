@@ -1,5 +1,4 @@
 import pdb
-
 import sys
 import linecache
 import cmd
@@ -156,26 +155,15 @@ class Epdb(pdb.Pdb):
     def findsnapshot(self, ic):
         """Looks for a snpashot to use for stepping backwards.
         Returns snapshot data"""
-        #debug("findsnapshot", ic)
         bestic = -1
         bestsnapshot = None
         snapshots = dbg.current_timeline.get_snapshots()
-        #for k in self.snapshots.keys():
-        #    e = self.snapshots[k]
         for sid in snapshots:
             e = self.snapshots[sid]
-            #debug("try snapshot: ",e.id,e.ic)
             if e.ic <= ic:
                 if e.ic > bestic:
                     bestic = e.ic
                     bestsnapshot = e
-                    #debug("bestsnapshot found")
-                else:
-                    pass
-                    #debug("snapshot ic smaller than best ic")
-            else:
-                pass
-                #debug("snapshot ic bigger than current ic")
         return bestsnapshot
         
     def findnextbreakpointic(self):
@@ -575,9 +563,31 @@ class Epdb(pdb.Pdb):
 
     def do_snapshot(self, arg, temporary=0):
         """snapshot - makes a snapshot"""
+        ic = dbg.ic
+        debug("Ic:", ic)
+        snapshots = dbg.current_timeline.get_snapshots()
+        for sid in snapshots:
+            s = self.snapshots[sid]
+            if ic == s.ic:
+                debug("This ic already has an instruction count")
+                return
+            
         r = self.make_snapshot()
+        debug("Ic after:", ic)
+        debug("self.stopafter:", self.stopafter)
+        debug("make return:", r)
+        debug("self.running mode", self.running_mode)
         if self.stopafter > 0:
             self.stopafter -= 1
+        if r == "snapshotmade":
+            return
+
+        # TODO: support other running_modes
+        if self.running_mode == 'stopafter' and self.stopafter == -1:
+            self.preprompt()
+            print(self.lastline)
+            self.running_mode = None
+            self.set_resources()
         return r
     
     def do_restore(self, arg):
@@ -594,22 +604,11 @@ class Epdb(pdb.Pdb):
     
     def do_continued(self, arg):
         continued = dbg.current_timeline.get_continue()
-        debug('continued: ',
-              continued)
+        debug('continued: ', continued)
     
     def do_nde(self, arg):
         """Shows the current nde. Debugging only."""
         debug('nde:', dbg.nde)
-    
-    def do_snapshots(self, arg):
-        """Lists all snapshots"""
-        
-        #debug("id        ic")
-        #debug("------------")
-        #for k in self.snapshots.keys():
-        #    e = self.snapshots[k]
-        #    print(e.id, e.ic)
-        #self.mp.list_snapshots()
 
     def do_resources(self, arg):
         debug("show resources#")
