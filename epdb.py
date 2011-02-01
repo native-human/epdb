@@ -18,7 +18,9 @@ import shareddict
 import tempfile
 import resources
 import time
+import asyncmd
 from debug import debug
+from debug import sendcmd
 from reprlib import Repr
 
 dbgpath = None
@@ -26,6 +28,8 @@ dbgpath = None
 _repr = Repr()
 _repr.maxstring = 200
 _saferepr = _repr.repr
+
+line_prefix = '\n-> '
 
 def readconfig():
     global dbgpath
@@ -35,7 +39,7 @@ def readconfig():
         config.read(os.path.expanduser("~/.config/epdb.conf"))
         dbgmods = config.get('Main', 'dbgmods')
     except:
-        dbgmods = '/home/patrick/myprogs/epdb/dbgmods'
+        pass
     dbgpath = dbgmods
     #debug("dbgmods", dbgmods)
     if not dbgmods in sys.path:
@@ -129,7 +133,7 @@ class SnapshotData:
         self.ic = ic
         self.references = 0
 
-class Epdb(pdb.Pdb):
+class Epdb(asyncmd.Asyncmd, pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self, skip=['random', 'time', 'debug', 'fnmatch', 'epdb',
                 'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
@@ -140,6 +144,7 @@ class Epdb(pdb.Pdb):
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
                 'functools', 'resources', 'bdb', 'debug', 'runpy'])
+        asyncmd.Asyncmd.__init__(self)
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -265,11 +270,12 @@ class Epdb(pdb.Pdb):
 
     def preprompt(self):
         t = time.time()
-        debug("ic:", dbg.ic, "mode:", dbg.mode)
+        sendcmd("ic:", dbg.ic, "mode:", dbg.mode)
         if self.command_running_start_time:
-            debug("time:", t-self.command_running_start_time)
+            sendcmd("time:", t-self.command_running_start_time)
+
         else:
-            debug("time: ")
+            sendcmd("time: ")
         self.command_running_start_time = None
     
     def preloop(self):
@@ -321,7 +327,8 @@ class Epdb(pdb.Pdb):
         self.interaction(self.lastframe, None)
         
     def init_reversible(self):
-        #self.command_running_start_time = time.time()
+        #self.command_run
+        ning_start_time = time.time()
         self.command_running_start_time = None
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
@@ -405,9 +412,9 @@ class Epdb(pdb.Pdb):
             
     def do_p(self, arg):
         try:
-            debug("var#", arg, "#", repr(self._getval(arg)),'#', sep='')
+            sendcmd("var#", arg, "#", repr(self._getval(arg)),'#', sep='')
         except:
-            debug("varerror#", arg)
+            sendcmd("varerror#", arg)
     # make "print" an alias of "p" since print isn't a Python statement anymore
     do_print = do_p
             
@@ -422,7 +429,7 @@ class Epdb(pdb.Pdb):
         exc_type_name = exc_type.__name__
         print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
-            debug("syntax_error", exc_value[1][0], exc_value[1][1], '', sep='#')
+            sendcmd("syntax_error", exc_value[1][0], exc_value[1][1], '', sep='#')
         self.interaction(frame, exc_traceback)
     
     def user_line(self, frame):
@@ -564,7 +571,7 @@ class Epdb(pdb.Pdb):
     def do_snapshot(self, arg, temporary=0):
         """snapshot - makes a snapshot"""
         ic = dbg.ic
-        debug("Ic:", ic)
+        #debug("Ic:", ic)
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             s = self.snapshots[sid]
@@ -573,19 +580,22 @@ class Epdb(pdb.Pdb):
                 return
             
         r = self.make_snapshot()
-        debug("Ic after:", ic)
-        debug("self.stopafter:", self.stopafter)
-        debug("make return:", r)
-        debug("self.running mode", self.running_mode)
+        #debug("Ic after:", ic)
+        #debug("self.stopafter:", self.stopafter)
+        #debug("make return:", r)
+        #debug("self.running mode", self.running_mode)
         if self.stopafter > 0:
             self.stopafter -= 1
         if r == "snapshotmade":
             return
 
         # TODO: support other running_modes
+        # Note: This works for some reason for the other modes. However,
+        # I am not sure if it works in every case (e.g.: if some other command
+        # sets a different mode than set_step)
         if self.running_mode == 'stopafter' and self.stopafter == -1:
             self.preprompt()
-            print(self.lastline)
+            sendcmd(self.lastline, prefix="")
             self.running_mode = None
             self.set_resources()
         return r
@@ -611,15 +621,15 @@ class Epdb(pdb.Pdb):
         debug('nde:', dbg.nde)
 
     def do_resources(self, arg):
-        debug("show resources#")
+        sendcmd("show resources#")
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             #for rk in resource:
             #    debug(" ", rk, resource[rk])
             #debug("Resource: ", resource)
-            debug('resource#', k[0],'#', k[1],'#',sep='')
+            sendcmd('resource#', k[0],'#', k[1],'#',sep='')
             for rid in resource:
-                debug('resource_entry#', k[0],'#', k[1],'#',rid,'#', resource[rid],'#', sep='')
+                sendcmd('resource_entry#', k[0],'#', k[1],'#',rid,'#', resource[rid],'#', sep='')
         #debug("------")
 
     def do_ic(self, arg):
@@ -632,11 +642,11 @@ class Epdb(pdb.Pdb):
     
     def do_timeline_snapshots(self, arg):
         "List all snapshots for the timeline"
-        debug("timeline_snapshots#")
+        sendcmd("timeline_snapshots#")
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             e = self.snapshots[sid]
-            debug('tsnapshot#', e.id, '#', e.ic,'#',sep='') 
+            sendcmd('tsnapshot#', e.id, '#', e.ic,'#',sep='') 
     
     def do_switch_timeline(self, arg):
         """Switch to another timeline"""
@@ -649,7 +659,7 @@ class Epdb(pdb.Pdb):
         ic = timeline.get_ic()
 
         dbg.timelines.set_current_timeline(timeline.get_name())
-        debug("Switched to timeline", timeline.get_name())
+        sendcmd("Switched to timeline", timeline.get_name())
         dbg.current_timeline = timeline
         s = self.findsnapshot(ic)
         self.mp.activatesp(s.id, ic - s.ic)
@@ -672,7 +682,7 @@ class Epdb(pdb.Pdb):
         dbg.current_timeline = newtimeline
         dbg.mode = 'normal'
         debug("ic:", dbg.ic, "mode:", dbg.mode)
-        debug("newtimeline successful")
+        sendcmd("newtimeline successful")
         
     def do_quit(self, arg):
         self._user_requested_quit = 1
@@ -688,12 +698,12 @@ class Epdb(pdb.Pdb):
             debug("mode: ", dbg.mode)
         
     def do_ron(self, arg):
-        """Enables reverse debugging"""
+        """Enables reversible debugging"""
         # TODO create or activate a new timeline
         self.ron = True
     
     def do_roff(self, arg):
-        """Disables reverse debugging"""
+        """Disables reversible debugging"""
         if self.ron:
             if dbg.ic > dbg.max_ic:
                 dbg.max_ic = dbg.ic
@@ -990,7 +1000,7 @@ class Epdb(pdb.Pdb):
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             s = self.snapshots[sid]
-            print(repr(s.id), repr(arg))
+            #print(repr(s.id), repr(arg))
             if s.id == int(arg):
                 break
         else:
@@ -1307,6 +1317,59 @@ class Epdb(pdb.Pdb):
                 debug('Deleted breakpoint', i
                       )
     do_cl = do_clear # 'c' is already an abbreviation for 'continue'
+        
+    def print_stack_trace(self):
+        try:
+            for frame_lineno in self.stack:
+                self.print_stack_entry(frame_lineno)
+        except KeyboardInterrupt:
+            pass
+    
+    def print_stack_entry(self, frame_lineno, prompt_prefix=line_prefix):
+        frame, lineno = frame_lineno
+        if frame is self.curframe:
+            sendcmd('>', self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
+        else:
+            sendcmd(' '+self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
+        #sendcmd(self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
+
+    def do_commands(self, arg):
+        """Not supported yet"""
+        # because epdbs implementation calls the blocking cmdloop there
+    
+    def interaction(self, frame, traceback):
+        self.setup(frame, traceback)
+        self.print_stack_entry(self.stack[self.curindex])
+        r = False
+        #self.cmdloop()
+        while not r:
+            r = self.asyncmdloop()
+        self.forget()
+    
+    def precmd(self, line):
+        """Handle alias expansion and ';;' separator."""
+        if not line.strip():
+            return line
+        args = line.split()
+        while args[0] in self.aliases:
+            line = self.aliases[args[0]]
+            ii = 1
+            for tmpArg in args[1:]:
+                line = line.replace("%" + str(ii),
+                                      tmpArg)
+                ii = ii + 1
+            line = line.replace("%*", ' '.join(args[1:]))
+            args = line.split()
+        # split into ';;' separated commands
+        # unless it's an alias command
+        if args[0] != 'alias':
+            marker = line.find(';;')
+            if marker >= 0:
+                # queue up everything after marker
+                next = line[marker+2:].lstrip()
+                self.cmdqueue.append(next)
+                line = line[:marker].rstrip()
+        return line
 
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
@@ -1420,18 +1483,50 @@ def help():
         #print('Sorry, can\'t find the help file "epdb.doc"', end=' ')
         #print('along the Python search path')
 
-def main():
-    if not sys.argv[1:] or sys.argv[1] in ("--help", "-h"):
-        print("usage: epdb.py scriptfile [arg] ...")
-        sys.exit(2)
+def usage():
+    print("usage: epdb.py scriptfile [arg] ...")
+    sys.exit(2)
 
-    mainpyfile =  sys.argv[1]     # Get script filename
+def main():
+    #if not sys.argv[1:] or sys.argv[1] in ("--help", "-h"):
+    #    print("usage: epdb.py scriptfile [arg] ...")
+    #    sys.exit(2)
+    use_stdout = True # if True, the debugger use stdout to communicate with user
+    use_uds = False # if True, the debugger uses unix domain sockets for
+                    # communication with the user (e.g., gui)
+    uds_file = None  # file to use for unix domain sockets
+    del sys.argv[0]         # Hide "epdb.py" from argument list
+
+    i = 0
+    while i < len(sys.argv):
+        if sys.argv[i] == '--help' or sys.argv[i] == '-h':
+            usage()
+        elif sys.argv[i] == '--stdout':
+            use_stdout = True
+            use_udsockets = False
+        elif sys.argv[i] == '--uds':
+            use_udsockets = True
+            use_stdout = False
+            i += 1
+            try:
+                uds_file = sys.argv[i]
+            except:
+                usage()
+        else:
+            break
+        i += 1
+    else:
+        usage()
+        
+    mainpyfile = sys.argv[i]  # Get script file name
+    del sys.argv[0:i]   # delete all files until 
+    print("mainpyfile", mainpyfile)
+    print("udsfile", uds_file)
+    #mainpyfile =  sys.argv[1]     # Get script filename
     if not os.path.exists(mainpyfile):
         print('Error:', mainpyfile, 'does not exist')
         sys.exit(1)
-
-    del sys.argv[0]         # Hide "pdb.py" from argument list
-
+            
     # Replace pdb's dir with script's dir in front of module search path.
     sys.path[0] = os.path.dirname(mainpyfile)
 

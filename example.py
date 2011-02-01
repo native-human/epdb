@@ -1,10 +1,10 @@
-import random
-
-j = 1
-
-for i in range(1):
-    random.seed()
-    print(random.randint(0,10))
+#import random
+#
+#j = 1
+#
+#for i in range(1):
+#    random.seed()
+#    print(random.randint(0,10))
 
 def blah():
     print('blah')
@@ -12,6 +12,6 @@ def blah():
 
 print('a')
 
-blah()
+#blah()
 print('b')
 print('c')

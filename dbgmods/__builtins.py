@@ -35,8 +35,9 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
 def input(prompt=""):
-    caller = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
-    if caller in ['cmd.py']:
+    #caller = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
+    #if caller in ['cmd.py']:
+    if dbg.is_dbg_callee():
         return builtins.__orig__input(prompt)
     if dbg.mode == 'redo' or dbg.mode == 'replay':
         return None

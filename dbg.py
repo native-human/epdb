@@ -5,7 +5,7 @@ import sys
 import _thread
 
 def is_dbg_callee():
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py']:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py"]:
         return True
     return False
 
