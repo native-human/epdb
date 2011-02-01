@@ -133,7 +133,159 @@ class SnapshotData:
         self.ic = ic
         self.references = 0
 
-class Epdb(asyncmd.Asyncmd, pdb.Pdb):
+class StdDbgCom(cmd.Cmd):
+    def __init__(self, debugger):
+        asyncmd.Asyncmd.__init__(self)
+        self.debugger = debugger
+        self.prompt = '(Epdb) \n'
+        self.aliases = {}
+        
+    def do_p(self, arg):
+        return self.debugger.cmd_print(arg)
+    do_print = do_p
+
+    def do_set_resources(self, args):
+        return self.debugger.cmd_set_resources(arg)
+        
+    def do_snapshot(self, arg, temporary=0):
+        return self.debugger.cmd_snapshot(arg, temporary)
+
+    def do_restore(self, arg):
+        return self.debugger.cmd_restore(arg)
+
+    def do_continued(self, arg):
+        return self.debugger.cmd_continued(arg)
+    
+    def do_nde(self, arg):
+        """Shows the current nde. Debugging only."""
+        return self.debugger.cmd_nde(arg)
+
+    def do_resources(self, arg):
+        return self.debugger.cmd_resources(arg)
+
+    def do_ic(self, arg):
+        """Shows the current instruction count"""
+        return self.debugger.cmd_ic(arg)
+        
+    def do_timelines(self, arg):
+        """List all timelines."""
+        return self.debugger.cmd_timelines(arg)
+    
+    def do_timeline_snapshots(self, arg):
+        "List all snapshots for the timeline"
+        return self.debugger.cmd_timeline_snapshots(arg)
+
+    def do_switch_timeline(self, arg):
+        """Switch to another timeline"""
+        return self.debugger.cmd_switch_timeline(arg)
+        
+    def do_current_timeline(self, arg):
+        """View the name of the current timeline"""
+        return self.debugger.cmd_current_timeline(arg)
+
+    def do_newtimeline(self, arg):
+        """Create a new timeline. This allows changing the program flow from the last run"""
+        return self.debugger.cmd_newtimeline(arg)
+        
+    def do_quit(self, arg):
+        """quits the program"""
+        return self.debugger.cmd_quit()
+    
+    def do_mode(self, arg):
+        """Shows the current mode."""
+        return self.debugger.cmd_mode(arg)
+    
+    def do_ron(self, arg):
+        """Enables reversible debugging"""
+        return self.debugger.cmd_ron(arg)
+    
+    def do_roff(self, arg):
+        """Disables reversible debugging"""
+        return self.debugger.cmd_roff(arg)
+        
+    def do_rstep(self, arg):
+        """Steps one step backwards"""
+        return self.debugger.cmd_rstep(arg)
+        
+    def do_rnext(self, arg):
+        """Reverse a next command."""
+        return self.debugger.cmd_rnext(arg)
+        
+    def do_rcontinue(self, arg):
+        """Continues in backward direction"""
+        return self.debugger.cmd_rcontinue(arg)
+
+    def do_step(self, arg):
+        return self.debugger.cmd_step(arg)
+    do_s = do_step    
+
+    def do_next(self, arg):
+        return self.debugger.cmd_next(arg)
+    do_n = do_next
+    
+    def do_continue(self, arg):
+        return self.debugger.cmd_continue(arg)
+    do_c = do_cont = do_continue
+        
+    def do_return(self, arg):
+        "not implmented yet for epdb"
+    #do_r = do_return   
+
+    def do_activate_snapshot(self, arg):
+        """activate a snapshot of the current timeline"""
+        return self.debugger.cmd_activate_snapshot(arg)
+        
+    def do_show_break(self, arg):
+        return self.debugger.cmd_show_break(arg)
+    
+    def do_break(self, arg, temporary = 0):
+        return self.debugger.cmd_break(arg, temporary)
+    
+    def do_clear(self, arg):
+        """Three possibilities, tried in this order:
+        clear -> clear all breaks, ask for confirmation
+        clear file:lineno -> clear all breaks at file:lineno
+        clear bpno bpno ... -> clear breakpoints by number"""
+        return self.debugger.cmd_clear(arg)
+        
+    do_cl = do_clear # 'c' is already an abbreviation for 'continue'
+        
+    def do_commands(self, arg):
+        """Not supported yet"""
+        # because epdbs implementation calls the blocking cmdloop there
+
+    def precmd(self, line):
+        """Handle alias expansion and ';;' separator."""
+        if not line.strip():
+            return line
+        args = line.split()
+        while args[0] in self.aliases:
+            line = self.aliases[args[0]]
+            ii = 1
+            for tmpArg in args[1:]:
+                line = line.replace("%" + str(ii),
+                                      tmpArg)
+                ii = ii + 1
+            line = line.replace("%*", ' '.join(args[1:]))
+            args = line.split()
+        # split into ';;' separated commands
+        # unless it's an alias command
+        if args[0] != 'alias':
+            marker = line.find(';;')
+            if marker >= 0:
+                # queue up everything after marker
+                next = line[marker+2:].lstrip()
+                self.cmdqueue.append(next)
+                line = line[:marker].rstrip()
+        return line
+
+    def preloop(self):
+        self.debugger.preprompt()
+
+    def get_cmd(self):
+        self.cmdloop()
+ 
+class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self, skip=['random', 'time', 'debug', 'fnmatch', 'epdb',
                 'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
@@ -144,7 +296,8 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
                 'functools', 'resources', 'bdb', 'debug', 'runpy'])
-        asyncmd.Asyncmd.__init__(self)
+        #asyncmd.Asyncmd.__init__(self)
+        self.dbgcom = StdDbgCom(self)
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -273,13 +426,9 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         sendcmd("ic:", dbg.ic, "mode:", dbg.mode)
         if self.command_running_start_time:
             sendcmd("time:", t-self.command_running_start_time)
-
         else:
             sendcmd("time: ")
         self.command_running_start_time = None
-    
-    def preloop(self):
-        self.preprompt()
     
     def _runscript(self, filename):
         # The script has to run in __main__ namespace (or imports from
@@ -347,7 +496,6 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.psnapshot = None
         self.psnapshot_id = None
         
-        self.prompt = '(Epdb) \n'
         self.running_mode = None
         self.stopafter = -1
         
@@ -385,7 +533,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
     
     def set_resources(self):
         """Sets the resources for the actual position"""
-        #debug("set resources")
+        debug("set resources")
         #debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
@@ -410,15 +558,14 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             #    debug(" ", rk, resource[rk])
             #debug(k)
             
-    def do_p(self, arg):
+    def cmd_print(self, arg):
         try:
             sendcmd("var#", arg, "#", repr(self._getval(arg)),'#', sep='')
         except:
             sendcmd("varerror#", arg)
     # make "print" an alias of "p" since print isn't a Python statement anymore
-    do_print = do_p
             
-    def do_set_resources(self, args):
+    def cmd_set_resources(self, args):
         self.set_resources()
     
     def user_exception(self, frame, exc_info):
@@ -481,6 +628,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
+                    self.set_resources()
 
         lineno = frame.f_lineno
         filename = frame.f_code.co_filename
@@ -509,13 +657,16 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             if self.break_here(frame):
                 self.stopnocalls = None
                 #debug("user_line interaction")
+                self.set_resources()
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 #setmode()
                 #debug("user_line interaction")
-                self.interaction(frame, None)
+                self.set_resources()
+                interaction(frame, None)
         elif self.running_mode == 'step':
             setmode()
+            self.set_resources()
             self.interaction(frame, None)
         elif self.running_mode == 'stopafter':
             #debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
@@ -525,6 +676,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
                 else:
                     dbg.mode = 'normal'
                 #debug("stopafteruserline interaction")
+                self.set_resources()
                 self.interaction(frame, None)
             else:
                 self.stopafter -= 1
@@ -568,7 +720,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.set_step()
         self.running_mode = 'continue'
 
-    def do_snapshot(self, arg, temporary=0):
+    def cmd_snapshot(self, arg, temporary=0):
         """snapshot - makes a snapshot"""
         ic = dbg.ic
         #debug("Ic:", ic)
@@ -600,7 +752,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             self.set_resources()
         return r
     
-    def do_restore(self, arg):
+    def cmd_restore(self, arg):
         """Restore a previous Snapshot, e.g. restore 0"""
         # TODO leave current timeline and go into roff mode
         try:
@@ -612,15 +764,15 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.mp.activatesp(id)
         raise EpdbExit()
     
-    def do_continued(self, arg):
+    def cmd_continued(self, arg):
         continued = dbg.current_timeline.get_continue()
         debug('continued: ', continued)
     
-    def do_nde(self, arg):
+    def cmd_nde(self, arg):
         """Shows the current nde. Debugging only."""
         debug('nde:', dbg.nde)
 
-    def do_resources(self, arg):
+    def cmd_resources(self, arg):
         sendcmd("show resources#")
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
@@ -632,15 +784,15 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
                 sendcmd('resource_entry#', k[0],'#', k[1],'#',rid,'#', resource[rid],'#', sep='')
         #debug("------")
 
-    def do_ic(self, arg):
+    def cmd_ic(self, arg):
         """Shows the current instruction count"""
         debug('The instruction count is:', dbg.ic)
         
-    def do_timelines(self, arg):
+    def cmd_timelines(self, arg):
         """List all timelines."""
         dbg.timelines.show()
     
-    def do_timeline_snapshots(self, arg):
+    def cmd_timeline_snapshots(self, arg):
         "List all snapshots for the timeline"
         sendcmd("timeline_snapshots#")
         snapshots = dbg.current_timeline.get_snapshots()
@@ -648,7 +800,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             e = self.snapshots[sid]
             sendcmd('tsnapshot#', e.id, '#', e.ic,'#',sep='') 
     
-    def do_switch_timeline(self, arg):
+    def cmd_switch_timeline(self, arg):
         """Switch to another timeline"""
         try:
             timeline = dbg.timelines.get(arg)
@@ -665,11 +817,11 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.mp.activatesp(s.id, ic - s.ic)
         raise EpdbExit()
         
-    def do_current_timeline(self, arg):
+    def cmd_current_timeline(self, arg):
         """View the name of the current timeline"""
         dbg.current_timeline.show()
         
-    def do_newtimeline(self, arg):
+    def cmd_newtimeline(self, arg):
         """Create a new timeline. This allows changing the program flow from the last run"""
         if arg.strip() == '':
             debug("You need to supply a name for the new timeline")
@@ -684,39 +836,39 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         debug("ic:", dbg.ic, "mode:", dbg.mode)
         sendcmd("newtimeline successful")
         
-    def do_quit(self, arg):
+    def cmd_quit(self):
         self._user_requested_quit = 1
         self.mp.quit()
         self.set_quit()
         return 1
     
-    def do_mode(self, arg):
+    def cmd_mode(self, arg):
         """Shows the current mode."""
         if self.is_postmortem:
             debug("mode: postmortem", dbg.mode)
         else:
             debug("mode: ", dbg.mode)
         
-    def do_ron(self, arg):
+    def cmd_ron(self, arg):
         """Enables reversible debugging"""
         # TODO create or activate a new timeline
         self.ron = True
     
-    def do_roff(self, arg):
+    def cmd_roff(self, arg):
         """Disables reversible debugging"""
         if self.ron:
             if dbg.ic > dbg.max_ic:
                 dbg.max_ic = dbg.ic
             self.ron = False
             dbg.current_timeline.deactivate(dbg.ic)
+    #
+    #def interaction(self, frame, traceback):
+    #    # Set all the resources before doing interaction
+    #    self.running_mode = None
+    #    self.set_resources()
+    #    return pdb.Pdb.interaction(self, frame, traceback)
     
-    def interaction(self, frame, traceback):
-        # Set all the resources before doing interaction
-        self.running_mode = None
-        self.set_resources()
-        return pdb.Pdb.interaction(self, frame, traceback)
-    
-    def do_rstep(self, arg):
+    def cmd_rstep(self, arg):
         """Steps one step backwards"""
         
         if not self.ron:
@@ -748,7 +900,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
-    def do_rnext(self, arg):
+    def cmd_rnext(self, arg):
         """Reverse a next command."""
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
@@ -781,7 +933,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
-    def do_rcontinue(self, arg):
+    def cmd_rcontinue(self, arg):
         """Continues in backward direction"""
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
@@ -823,7 +975,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         self.stopnocalls = None
         return pdb.Pdb.set_step(self)
         
-    def do_step(self, arg):
+    def cmd_step(self, arg):
         if self.is_postmortem:
             debug("You are at the end of the program. You cant go forward.")
             return
@@ -850,10 +1002,8 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             self.running_mode = 'step'
             self.command_running_start_time = time.time()
             return 1
-    do_s = do_step # otherwise the pdb impl is called
-        
 
-    def do_next(self, arg):
+    def cmd_next(self, arg):
         if self.is_postmortem:
             debug("You are at the end of the program. You cant go forward.")
             return
@@ -912,9 +1062,9 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         else:
             self.command_running_start_time = time.time()
             return pdb.Pdb.do_next(self, arg)
-    do_n = do_next
+    do_n = cmd_next
     
-    def do_continue(self, arg):
+    def cmd_continue(self, arg):
         if self.is_postmortem:
             debug("You are at the end of the program. You cant go forward.")
             return
@@ -942,13 +1092,10 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
         else:
             self.command_running_start_time = time.time()
         return pdb.Pdb.do_continue(self, arg)
-    do_c = do_cont = do_continue
         
-    def do_return(self, arg):
+    def cmd_return(self, arg):
         debug("Return not implemented yet for epdb")
 
-    do_r = do_return
-        
     def set_quit(self):
         pdb.Pdb.set_quit(self)
     
@@ -986,8 +1133,8 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             debug("user_return interaction")
             self.interaction(frame, None)
     
-    def do_activate_snapshot(self, arg):
-        """Steps one step backwards"""
+    def cmd_activate_snapshot(self, arg):
+        """activate the snapshot with the given id"""
 
         if not self.ron:
             debug("You are not in reversible mode. You can enable it with 'ron'.")
@@ -1162,13 +1309,13 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
     def get_all_breaks(self):
         return self.breaks
     
-    def do_show_break(self, arg):
+    def cmd_show_break(self, arg):
         from breakpoint import Breakpoint
         debug("Breakpoint by number: ", Breakpoint.bpbynumber)
         debug("Breakpoint list: ", Breakpoint.bplist)
         debug("self.breaks: ", self.breaks)
         
-    def do_break(self, arg, temporary = 0):
+    def cmd_break(self, arg, temporary = 0):
         from breakpoint import Breakpoint
         # break [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
@@ -1270,7 +1417,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             return 0
         return lineno
     
-    def do_clear(self, arg):
+    def cmd_clear(self, arg):
         """Three possibilities, tried in this order:
         clear -> clear all breaks, ask for confirmation
         clear file:lineno -> clear all breaks at file:lineno
@@ -1314,9 +1461,7 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             if err:
                 debug('***', err)
             else:
-                debug('Deleted breakpoint', i
-                      )
-    do_cl = do_clear # 'c' is already an abbreviation for 'continue'
+                debug('Deleted breakpoint', i)
         
     def print_stack_trace(self):
         try:
@@ -1333,44 +1478,20 @@ class Epdb(asyncmd.Asyncmd, pdb.Pdb):
             sendcmd(' '+self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
         #sendcmd(self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
 
-    def do_commands(self, arg):
+    def cmd_commands(self, arg):
         """Not supported yet"""
         # because epdbs implementation calls the blocking cmdloop there
     
     def interaction(self, frame, traceback):
         self.setup(frame, traceback)
         self.print_stack_entry(self.stack[self.curindex])
-        r = False
+        #r = False
         #self.cmdloop()
-        while not r:
-            r = self.asyncmdloop()
+        #while not r:
+        #    r = self.asyncmdloop()
+        self.dbgcom.get_cmd()
         self.forget()
     
-    def precmd(self, line):
-        """Handle alias expansion and ';;' separator."""
-        if not line.strip():
-            return line
-        args = line.split()
-        while args[0] in self.aliases:
-            line = self.aliases[args[0]]
-            ii = 1
-            for tmpArg in args[1:]:
-                line = line.replace("%" + str(ii),
-                                      tmpArg)
-                ii = ii + 1
-            line = line.replace("%*", ' '.join(args[1:]))
-            args = line.split()
-        # split into ';;' separated commands
-        # unless it's an alias command
-        if args[0] != 'alias':
-            marker = line.find(';;')
-            if marker >= 0:
-                # queue up everything after marker
-                next = line[marker+2:].lstrip()
-                self.cmdqueue.append(next)
-                line = line[:marker].rstrip()
-        return line
-
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
     from breakpoint import Breakpoint
@@ -1520,9 +1641,8 @@ def main():
         
     mainpyfile = sys.argv[i]  # Get script file name
     del sys.argv[0:i]   # delete all files until 
-    print("mainpyfile", mainpyfile)
-    print("udsfile", uds_file)
-    #mainpyfile =  sys.argv[1]     # Get script filename
+    #print("mainpyfile", mainpyfile)
+    #print("udsfile", uds_file)
     if not os.path.exists(mainpyfile):
         print('Error:', mainpyfile, 'does not exist')
         sys.exit(1)
