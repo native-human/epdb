@@ -19,8 +19,9 @@ import tempfile
 import resources
 import time
 import asyncmd
+import io
 from debug import debug
-from debug import sendcmd
+#from debug import sendcmd
 from reprlib import Repr
 
 dbgpath = None
@@ -284,7 +285,63 @@ class StdDbgCom(cmd.Cmd):
 
     def get_cmd(self):
         self.cmdloop()
+        
+    def send_ic_mode(self, ic, mode):
+        self.send_raw("ic:", ic, "mode:", mode)
+        
+    def send_time(self, time=None):
+        if time is None:
+            self.send_raw("time:")
+        else:
+            self.send_raw("time: ", time)
  
+    def send_var(self, varname, value):
+        self.send_raw("var#", varname, "#", value,'#', sep='')
+        
+    def send_varerr(self, varname):
+        self.send_raw("varerror#", arg)
+    
+    def send_synterr(self, file, ic):
+        self.send_raw("syntax_error", file, ic, '', sep='#')
+    
+    def send_lastline(self, line):
+        self.send_raw(line, prefix="")
+        
+    def send_resources(self, resources):
+        # resources [(resource_type, resource_location, [(id, ic), ...]), ...]
+        self.send_raw("show resources#")
+        for rtype, rloc, rlist in resources:
+            self.send_raw('resource#', rtype,'#', rloc,'#',sep='')
+            for rid, ric in rlist:
+                self.send_raw('resource_entry#', rtype,'#', rloc,'#',rid,'#', ric,'#', sep='')
+           
+    def send_timeline_snapshots(self, snapshot_list):
+        self.send_raw("timeline_snapshots#")
+        for snapshot in snapshot_list:
+            self.send_raw('tsnapshot#', snapshot.id, '#', snapshot.ic,'#',sep='')
+    
+    def send_timeline_switched(self, timeline_name):
+        self.send_raw("Switched to timeline", timeline_name)
+         
+    def send_newtimeline_success(self):
+        self.send_raw("newtimeline successful")
+           
+    def send_file_pos(self, formatted_line):
+        self.send_raw('>', formatted_line, prefix='')
+    
+    def send_expect_input(self):
+        self.send_raw("expect input#")
+        
+    def send_stdout(self, stdout):
+        self.send_raw("-->")
+        self.send_raw(stdout, prefix="#->", end='')
+        
+    def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
+        output = io.StringIO()
+        print(value, *args, sep=sep, end=end, file=output)
+        for line in output.getvalue().splitlines():
+            print(prefix + line)
+    
 class Epdb(pdb.Pdb):
     def __init__(self):
         pdb.Pdb.__init__(self, skip=['random', 'time', 'debug', 'fnmatch', 'epdb',
@@ -297,7 +354,7 @@ class Epdb(pdb.Pdb):
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
                 'functools', 'resources', 'bdb', 'debug', 'runpy'])
         #asyncmd.Asyncmd.__init__(self)
-        self.dbgcom = StdDbgCom(self)
+        dbg.dbgcom = self.dbgcom = StdDbgCom(self)
         self.init_reversible()
     
     def is_skipped_module(self, module_name):
@@ -423,11 +480,11 @@ class Epdb(pdb.Pdb):
 
     def preprompt(self):
         t = time.time()
-        sendcmd("ic:", dbg.ic, "mode:", dbg.mode)
+        self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
         if self.command_running_start_time:
-            sendcmd("time:", t-self.command_running_start_time)
+            self.dbgcom.send_time(t-self.command_running_start_time)
         else:
-            sendcmd("time: ")
+            self.dbgcom.send_time()
         self.command_running_start_time = None
     
     def _runscript(self, filename):
@@ -560,9 +617,9 @@ class Epdb(pdb.Pdb):
             
     def cmd_print(self, arg):
         try:
-            sendcmd("var#", arg, "#", repr(self._getval(arg)),'#', sep='')
+            self.dbgcom.send_var(arg, repr(self._getval(arg)))
         except:
-            sendcmd("varerror#", arg)
+            self.dbgcom.send_varerr(arg)
     # make "print" an alias of "p" since print isn't a Python statement anymore
             
     def cmd_set_resources(self, args):
@@ -576,7 +633,7 @@ class Epdb(pdb.Pdb):
         exc_type_name = exc_type.__name__
         print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
-            sendcmd("syntax_error", exc_value[1][0], exc_value[1][1], '', sep='#')
+            self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
         self.interaction(frame, exc_traceback)
     
     def user_line(self, frame):
@@ -663,7 +720,7 @@ class Epdb(pdb.Pdb):
                 #setmode()
                 #debug("user_line interaction")
                 self.set_resources()
-                interaction(frame, None)
+                self.interaction(frame, None)
         elif self.running_mode == 'step':
             setmode()
             self.set_resources()
@@ -747,7 +804,7 @@ class Epdb(pdb.Pdb):
         # sets a different mode than set_step)
         if self.running_mode == 'stopafter' and self.stopafter == -1:
             self.preprompt()
-            sendcmd(self.lastline, prefix="")
+            self.send_lastline(self.lastline)
             self.running_mode = None
             self.set_resources()
         return r
@@ -773,16 +830,18 @@ class Epdb(pdb.Pdb):
         debug('nde:', dbg.nde)
 
     def cmd_resources(self, arg):
-        sendcmd("show resources#")
+        l = []
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             #for rk in resource:
             #    debug(" ", rk, resource[rk])
             #debug("Resource: ", resource)
-            sendcmd('resource#', k[0],'#', k[1],'#',sep='')
+            rl = []
             for rid in resource:
-                sendcmd('resource_entry#', k[0],'#', k[1],'#',rid,'#', resource[rid],'#', sep='')
-        #debug("------")
+                rl.append((rid, resource[rid]))
+            l.append((k[0],k[1], rl))
+        self.dbgcom.send_resources(l)
+                #type, location, id, ic
 
     def cmd_ic(self, arg):
         """Shows the current instruction count"""
@@ -794,11 +853,12 @@ class Epdb(pdb.Pdb):
     
     def cmd_timeline_snapshots(self, arg):
         "List all snapshots for the timeline"
-        sendcmd("timeline_snapshots#")
         snapshots = dbg.current_timeline.get_snapshots()
+        l = []
         for sid in snapshots:
             e = self.snapshots[sid]
-            sendcmd('tsnapshot#', e.id, '#', e.ic,'#',sep='') 
+            l.append(e)
+        self.dbgcom.send_timeline_snapshots(l)
     
     def cmd_switch_timeline(self, arg):
         """Switch to another timeline"""
@@ -811,7 +871,7 @@ class Epdb(pdb.Pdb):
         ic = timeline.get_ic()
 
         dbg.timelines.set_current_timeline(timeline.get_name())
-        sendcmd("Switched to timeline", timeline.get_name())
+        self.dbgcom.send_timeline_switched(timeline.get_name())
         dbg.current_timeline = timeline
         s = self.findsnapshot(ic)
         self.mp.activatesp(s.id, ic - s.ic)
@@ -833,8 +893,8 @@ class Epdb(pdb.Pdb):
         dbg.timelines.set_current_timeline(newtimeline.get_name())
         dbg.current_timeline = newtimeline
         dbg.mode = 'normal'
-        debug("ic:", dbg.ic, "mode:", dbg.mode)
-        sendcmd("newtimeline successful")
+        self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
+        self.dbgcom.send_newtimeline_success()
         
     def cmd_quit(self):
         self._user_requested_quit = 1
@@ -1473,9 +1533,11 @@ class Epdb(pdb.Pdb):
     def print_stack_entry(self, frame_lineno, prompt_prefix=line_prefix):
         frame, lineno = frame_lineno
         if frame is self.curframe:
-            sendcmd('>', self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
+            self.dbgcom.send_file_pos(self.format_stack_entry(frame_lineno, prompt_prefix))
         else:
-            sendcmd(' '+self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
+            pass
+            # I think I don't need this line, not sure however
+            #sendcmd(' '+self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
         #sendcmd(self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
 
     def cmd_commands(self, arg):

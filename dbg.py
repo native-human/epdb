@@ -23,6 +23,8 @@ class SnapshottingControl:
 
 snapshottingcontrol = SnapshottingControl()
 
+dbgcom = None
+
 timelines = None
 
 current_timeline = None
