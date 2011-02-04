@@ -5,3 +5,5 @@ multiprocessing/*
 lib/*
 bin/*
 countinst/package/.svn/*
+debian/usr/share/epdb/dbgmods
+epdb.deb
