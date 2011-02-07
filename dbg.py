@@ -57,3 +57,6 @@ modules = []
 
 ic = 0
 # maximum ic in current timeline.
+
+# modules to skip at next user_line
+skip_modules = set([])

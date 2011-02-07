@@ -26,6 +26,7 @@ from debug import debug
 #from debug import sendcmd
 from reprlib import Repr
 import string
+import imp
 
 dbgpath = None
 
@@ -95,20 +96,30 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
     new = True
     if name in dbg.modules:
         new = False
+    else:
+        # Check for patch module. If exist add module to dbg.skip_modules
+        # TODO what happens with submodules/package with a dot in it?
+        suffixes = [e[0] for e in imp.get_suffixes()]
+        found = False
+        for path in sys.path:
+            for suffix in suffixes:
+                if os.path.exists(os.path.join(path, "__" + name + suffix)):
+                    found = True
+                    break
+            else:
+                continue
+            break
+        if found:
+            dbg.skip_modules.add(name)
     mod = __pythonimport__(name, globals, locals, fromlist, level)
     if new:
         dbg.modules.append(name)
         if name[:2] != '__':
             try:
-                #debug("try import  __", name, sep="")
                 module = __pythonimport__('__'+name, globals, locals, fromlist)
-                #debug("success")
             except ImportError:
                 pass
-                #debug("nosuccess", sys.path)
-                #debug("nosuccess", name)
             else:
-                debug('Importing a module with patching', name)
                 for key in module.__dict__.keys():
                     #if key == name:
                     #    continue
@@ -122,6 +133,18 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
                     except AttributeError:
                         pass
     return mod
+
+
+def getmodulename(path):
+    """Get the module name, suffix, mode, and module type for a given file."""
+    filename = os.path.basename(path)
+    suffixes = [(-len(suffix), suffix, mode, mtype)
+                for suffix, mode, mtype in imp.get_suffixes()]
+    suffixes.sort() # try longest suffixes first, in case they overlap
+    for neglen, suffix, mode, mtype in suffixes:
+        if filename[neglen:] == suffix:
+            return filename[:neglen]
+            #return ModuleInfo(filename[:neglen], suffix, mode, mtype)
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -140,7 +163,7 @@ class SnapshotData:
 class UdsDbgCom():
     def __init__(self, debugger, filename):
         self.debugger = debugger
-        self.prompt = '(Epdb) \n'
+        self.prompt = '(Epdb) '
         self.aliases = {}
         self.filename = filename
         
@@ -588,8 +611,8 @@ class StdDbgCom(cmd.Cmd):
         self.send_raw("var#", varname, "#", value,'#', sep='')
    
     def send_varerr(self, varname):
-        self.send_raw("varerror#", arg)
-    
+        self.send_raw("varerror#", varname)
+
     def send_synterr(self, file, ic):
         self.send_raw("syntax_error", file, ic, '', sep='#')
     
@@ -641,7 +664,7 @@ class Epdb(pdb.Pdb):
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'resources', 'bdb', 'debug', 'runpy'])
+                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath'])
         #asyncmd.Asyncmd.__init__(self)
         if uds_file:
             dbg.dbgcom = self.dbgcom = UdsDbgCom(self, uds_file)
@@ -931,6 +954,14 @@ class Epdb(pdb.Pdb):
     
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
+        if dbg.skip_modules:
+            for m in dbg.skip_modules:
+                self.skip.add(m)
+            if getmodulename(frame.f_code.co_filename) in dbg.skip_modules:
+                dbg.skip_modules.clear()
+                return
+            dbg.skip_modules.clear()
+
         if hasattr(self, 'lastframe'):
             del self.lastframe
         self.lastframe = frame
