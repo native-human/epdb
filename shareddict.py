@@ -138,14 +138,14 @@ class ServerTimeline:
             else:
                 raise Exception("Couldn't add snapshot")
     
-    def show(self):
-        debug("Showing Timeline:", self.name)
-        debug("Snapshots: ")
-        for e in self.snapshots:
-            debug(e, sep=',')
-        debug('----')
-        debug("maxic:", self.max_ic)
-        debug("nextd: ", self.timelines.next_dict[self.name])
+    #def show(self):
+    #    debug("Showing Timeline:", self.name)
+    #    debug("Snapshots: ")
+    #    for e in self.snapshots:
+    #        debug(e, sep=',')
+    #    debug('----')
+    #    debug("maxic:", self.max_ic)
+    #    debug("nextd: ", self.timelines.next_dict[self.name])
         
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
@@ -155,7 +155,7 @@ class ServerTimeline:
         nde = {k:oldnde[k] for k in oldnde if k < ic}
         ude = {k:oldude[k] for k in oldude if k < ic}
         # TODO copy resources and managers
-        debug("Copy resources and managers")
+        #debug("Copy resources and managers")
         oldresources = self.timelines.resources_dict[self.name].copy()
         oldmanagers = self.timelines.managers_dict[self.name].copy()
         managers = {}
@@ -753,7 +753,7 @@ class TimelinesProxy:
         return self._remote_invoke('show',(), {})
             
 def shutdown():
-    debug("Shutting down")
+    #debug("Shutting down")
     conn = connect('/tmp/shareddict')
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
     

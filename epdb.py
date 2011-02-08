@@ -375,7 +375,7 @@ class UdsDbgCom():
             firstline,_,line = line.partition(b"\r\n")
             firstline = firstline.decode("UTF-8")
             firstline = firstline.rstrip('\r\n')
-            print("Received Line:", firstline)
+            #print("Received Line:", firstline)
             #line = self.precmd(line)
             stop = self.onecmd(firstline)
             #stop = self.postcmd(stop, line)
@@ -418,7 +418,7 @@ class UdsDbgCom():
             self.send('tsnapshot#' + str(snapshot.id) + '#' + str(snapshot.ic) + "\r\n")
     
     def send_timeline_switched(self, timeline_name):
-        self.send("switched to timeline#", timeline_name + "\r\n")
+        self.send("switched to timeline#" + timeline_name + "\r\n")
          
     def send_newtimeline_success(self, name):
         self.send("newtimeline successful#"+name+"\r\n")
@@ -433,7 +433,7 @@ class UdsDbgCom():
         self.send("clear_stdout#\r\n")
         lines = stdout.splitlines()
         for line in stdout:
-            self.send("add_stdout_line#"+'\r\n')
+            self.send("add_stdout_line#"+line+'\r\n')
     
     def send_break_nosuccess(self, filename, lineno, reason):
         self.send("break nosuccess#" + str(filename) + "#" + str(lineno) + \
@@ -446,11 +446,17 @@ class UdsDbgCom():
     def send_clear_success(self, number):
         self.send("clear success#" + str(number)+ "\r\n")
 
+    def send_program_finished(self):
+        self.send("program finished#" + "\r\n")
+       
+    def send_message(self, message):
+        self.send("message#" + message + "\r\n")
+
 class StdDbgCom(cmd.Cmd):
     def __init__(self, debugger):
         asyncmd.Asyncmd.__init__(self)
         self.debugger = debugger
-        self.prompt = '(Epdb) \n'
+        self.prompt = '(Epdb) '
         self.aliases = {}
         
     def do_p(self, arg):
@@ -633,7 +639,7 @@ class StdDbgCom(cmd.Cmd):
             self.send_raw('tsnapshot#', snapshot.id, '#', snapshot.ic,'#',sep='')
     
     def send_timeline_switched(self, timeline_name):
-        self.send_raw("Switched to timeline", timeline_name)
+        self.send_raw("Switched to timeline#" + timeline_name)
          
     def send_newtimeline_success(self,name):
         self.send_raw("newtimeline successful")
@@ -648,6 +654,12 @@ class StdDbgCom(cmd.Cmd):
         self.send_raw("-->")
         self.send_raw(stdout, prefix="#->", end='')
         
+    def send_program_finished(self):
+        self.send_raw("Program has finished")
+        
+    def send_message(self, message):
+        self.send_raw("message:" + message)
+    
     def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
         output = io.StringIO()
         print(value, *args, sep=sep, end=end, file=output)
@@ -664,7 +676,8 @@ class Epdb(pdb.Pdb):
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath'])
+                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath',
+                'encodings.ascii'])
         #asyncmd.Asyncmd.__init__(self)
         if uds_file:
             dbg.dbgcom = self.dbgcom = UdsDbgCom(self, uds_file)
@@ -840,7 +853,8 @@ class Epdb(pdb.Pdb):
         dbg.ic += 1
         if self._user_requested_quit:
             return
-        debug("Program has finished")
+        self.dbgcom.send_program_finished()
+        #debug("Program has finished")
         #debug("Going into post-mortem interaction mode", dbg.ic)
         dbg.mode = "post_mortem"
         self.set_resources()
@@ -906,7 +920,7 @@ class Epdb(pdb.Pdb):
     
     def set_resources(self):
         """Sets the resources for the actual position"""
-        debug("set resources")
+        #debug("set resources")
         #debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
@@ -1038,16 +1052,19 @@ class Epdb(pdb.Pdb):
             if self.break_here(frame):
                 self.stopnocalls = None
                 #debug("user_line interaction")
-                self.set_resources()
+                if dbg.mode == 'redo':
+                    self.set_resources()
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
                 #setmode()
                 #debug("user_line interaction")
-                self.set_resources()
+                if dbg.mode == 'redo':
+                    self.set_resources()
                 self.interaction(frame, None)
         elif self.running_mode == 'step':
             setmode()
-            self.set_resources()
+            if dbg.mode == 'redo':
+                self.set_resources()
             self.interaction(frame, None)
         elif self.running_mode == 'stopafter':
             #debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
@@ -1056,8 +1073,9 @@ class Epdb(pdb.Pdb):
                     dbg.mode = 'redo'
                 else:
                     dbg.mode = 'normal'
+                if dbg.mode == 'redo':
+                    self.set_resources()
                 #debug("stopafteruserline interaction")
-                self.set_resources()
                 self.interaction(frame, None)
             else:
                 self.stopafter -= 1
@@ -1266,7 +1284,8 @@ class Epdb(pdb.Pdb):
             #debug("current maxic ", dbg.current_timeline.get_max_ic())
         
         if dbg.ic == 0:
-            debug("At the beginning of the program. Can't step back")
+            self.dbgcom.send_message("At the beginning of the program. Can't step back.")
+            #debug("At the beginning of the program. Can't step back")
             return
         
         actual_ic = dbg.ic
@@ -1281,7 +1300,7 @@ class Epdb(pdb.Pdb):
             return
         
         steps = dbg.ic - s.ic - 1
-        debug('snapshot activation', 'id:', s.id, 'steps:', steps)
+        #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
         
@@ -1298,7 +1317,8 @@ class Epdb(pdb.Pdb):
             dbg.current_timeline.set_max_ic(dbg.ic)
         
         if dbg.ic == 0:
-            debug("At the beginning of the program. Can't step back")
+            self.dbgcom.send_message("At the beginning of the program. Can't step back.")
+            #debug("At the beginning of the program. Can't step back")
             return
         
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
@@ -1328,7 +1348,8 @@ class Epdb(pdb.Pdb):
             dbg.current_timeline.set_max_ic(dbg.ic)
             #debug("Set max ic: ", dbg.ic)
         if dbg.ic == 0:
-            debug("At the beginning of the program. Can't step back")
+            self.dbgcom.send_message("At the beginning of the program. Can't step back.")
+            #debug("At the beginning of the program. Can't step back")
             return
 
         highestic = self.findprecedingbreakpointic()
@@ -1362,7 +1383,8 @@ class Epdb(pdb.Pdb):
         
     def cmd_step(self, arg):
         if self.is_postmortem:
-            debug("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
+            #debug("You are at the end of the program. You cant go forward.")
             return
         if not self.ron:
             return pdb.Pdb.do_step(self, arg)
@@ -1371,10 +1393,10 @@ class Epdb(pdb.Pdb):
             #debug("Stepping in redo mode")
             s = self.findsnapshot(dbg.ic+1)
             if s == None:
-                debug("No snapshot made. Can't step back")
+                #debug("No snapshot made. Can't step back")
                 return
             if s.ic <= dbg.ic:
-                debug("No snapshot found to step forward to. Step forward normal way", dbg.ic, s.ic)
+                #debug("No snapshot found to step forward to. Step forward normal way", dbg.ic, s.ic)
                 self.set_step()
                 self.running_mode = 'step'
                 return 1
@@ -1390,7 +1412,8 @@ class Epdb(pdb.Pdb):
 
     def cmd_next(self, arg):
         if self.is_postmortem:
-            debug("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
+            #debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
             #debug("Next in redo mode")
@@ -1451,7 +1474,8 @@ class Epdb(pdb.Pdb):
     
     def cmd_continue(self, arg):
         if self.is_postmortem:
-            debug("You are at the end of the program. You cant go forward.")
+            #debug("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
             #debug("Continue in redo mode")
@@ -1499,7 +1523,7 @@ class Epdb(pdb.Pdb):
             
             # In case the program ends send the information of the last line
             # executed.
-            print("Error")
+            #print("Error")
             self.dbgcom.send_lastline(self.lastline)
             #print(self.lastline)
             pass
@@ -1542,7 +1566,7 @@ class Epdb(pdb.Pdb):
             return
 
         steps = 0
-        debug('snapshot activation', 'id:', s.id, 'steps:', steps)
+        #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
         self.mp.activatesp(s.id, steps)
         raise EpdbExit()
 
@@ -2077,7 +2101,7 @@ def main():
             debug("SystemExit exception. Frame:", frame)
             epdb.interaction(frame, t)
         except EpdbExit:
-            debug('EpdbExit caught')
+            #debug('EpdbExit caught')
             break
             # sys.exit(0)
         except bdb.BdbQuit:
@@ -2087,7 +2111,7 @@ def main():
             debug('ControllerExit caught')
             break
         except snapshotting.SnapshotExit:
-            debug('SnapshotExit caught')
+            #debug('SnapshotExit caught')
             break
         except EpdbPostMortem:
             t = sys.exc_info()[2]
