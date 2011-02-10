@@ -22,6 +22,7 @@ def orig_open(*args, **kargs):
     return builtins.__orig__open(*args, **kargs)
 
 def print(*args, sep=' ', end='\n', file=sys.stdout):
+    #builtins.__orig__print(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename)
     if dbg.is_dbg_callee():
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
     if dbg.mode == 'replay' or dbg.mode == 'redo':
@@ -29,8 +30,9 @@ def print(*args, sep=' ', end='\n', file=sys.stdout):
     elif dbg.mode == 'normal':
         s = io.StringIO()
         builtins.__orig__print(*args, sep=sep, end=end, file=s)
-        dbg.stdout_resource_manager.update_stdout(s.getvalue())
-        id = dbg.stdout_resource_manager.save()
+        stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        stdout_resource_manager.update_stdout(s.getvalue())
+        id = stdout_resource_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic+1] = id
         return builtins.__orig__print(*args, sep=sep, end=end, file=file)
 
@@ -46,8 +48,9 @@ def input(prompt=""):
         dbg.dbgcom.send_expect_input()
         #log.debug("expect input#")
         orig = builtins.__orig__input(prompt)
-        dbg.stdout_resource_manager.update_stdout(prompt + orig + '\r\n')
-        id = dbg.stdout_resource_manager.save()
+        stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        stdout_resource_manager.update_stdout(prompt + orig + '\r\n')
+        id = stdout_resource_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic+1] = id
         return orig
 

@@ -29,23 +29,7 @@ import debug as log
 #        return
    
 def seed(a=None):
-    def replay(a):
-        log.debug('Replaying seed', dbg.ic)
-    def undo(a):
-        log.debug('undoing seed')
-    def debug(a):
-        log.debug('debugging seed')
+    if dbg.mode == 'normal':
         random.__orig__seed(a)
         dbg.snapshottingcontrol.set_make_snapshot()
-        return
-    def redo(a):
-        log.debug("redoing seed")
-        return
-    if dbg.mode == 'replay':
-        return replay(a)
-    elif dbg.mode == 'normal':
-        return debug(a)
-    elif dbg.mode == 'redo':
-        return redo(a)
-    elif dbg.mode == 'undo':
         return

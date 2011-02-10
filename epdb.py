@@ -452,6 +452,10 @@ class UdsDbgCom():
     def send_message(self, message):
         self.send("message#" + message + "\r\n")
 
+    def send_debugmessage(self, message):
+        self.send("debugmessage#" + message + "\r\n")
+
+
 class StdDbgCom(cmd.Cmd):
     def __init__(self, debugger):
         asyncmd.Asyncmd.__init__(self)
@@ -660,6 +664,9 @@ class StdDbgCom(cmd.Cmd):
     def send_message(self, message):
         self.send_raw("message:" + message)
     
+    def send_debugmessage(self, message):
+        self.send_raw("debug: " + message)
+
     def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
         output = io.StringIO()
         print(value, *args, sep=sep, end=end, file=output)
@@ -677,7 +684,7 @@ class Epdb(pdb.Pdb):
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
                 'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath',
-                'encodings.ascii'])
+                'encodings.ascii', 'configparser', 'itertools', 'copy', 'linecache'])
         #asyncmd.Asyncmd.__init__(self)
         if uds_file:
             dbg.dbgcom = self.dbgcom = UdsDbgCom(self, uds_file)
@@ -759,6 +766,8 @@ class Epdb(pdb.Pdb):
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
         #fdebug("make snapshot", dbg.ic, self.snapshot_id)
+        stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
@@ -773,26 +782,22 @@ class Epdb(pdb.Pdb):
         
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
+        
+        
         if snapshot.activation_type == "step_forward":
-            # debug("step forward activation", snapshot.step_forward, dbg.ic)
-            self.stopnocalls = None
-            self.running_mode = "stopafter"
-            if snapshot.step_forward > 0:
-                dbg.mode = 'replay'
-                self.stopafter = snapshot.step_forward
-                #debug("stopafter", self.stopafter)
-                return 1
+            self.dbgcom.send_debugmessage("step_forward is deprecated. This activation shouldn't be used.")
+        elif snapshot.activation_type == "stop_at_ic":
+            self.stop_at_ic = ic = snapshot.stop_at_ic
+            self.running_mode = "stop_at_ic"
+            if dbg.ic == dbg.current_timeline.get_max_ic():
+                dbg.mode = 'normal'
             else:
-                if dbg.ic == dbg.current_timeline.get_max_ic():
-                    dbg.mode = 'normal'
-                else:
-                    dbg.mode = 'redo'
-                #debug("SET MODE TO: ", dbg.mode)
-                return
+                dbg.mode = 'redo'
+            if snapshot.stop_at_ic == dbg.ic:
+                return 1
+            return
         elif snapshot.activation_type == "stopatnocalls":
-            #debug("STOPATNOCALLS", snapshot.nocalls)
             self.set_next(self.curframe)
-            #self.set_step()
             self.stopnocalls = snapshot.nocalls
             self.running_mode = 'next'
             return 1
@@ -908,12 +913,23 @@ class Epdb(pdb.Pdb):
         self.snapshots = shareddict.DictProxy('snapshots')
         
         dbg.current_timeline.new_resource('__stdout__', '')
-        dbg.stdout_resource_manager = resources.StdoutResourceManager()
-        dbg.current_timeline.create_manager(('__stdout__', ''), dbg.stdout_resource_manager)
-        self.stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
-        id = self.stdout_manager.save()
+        stdout_resource_manager = resources.StdoutResourceManager()
+        stdout_manager = dbg.current_timeline.create_manager(('__stdout__', ''), stdout_resource_manager)
+        #
+        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        #self.dbgcom.send_debugmessage("stdout_manager: " + repr(type(stdout_manager)))
+        #stdout_manager.update_stdout("New line\n")
+        #
+        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        #self.dbgcom.send_debugmessage("stdout_manager: " + repr(stdout_manager.stdout_cache))
+        #stdout_manager.update_stdout("line2\n")
+        #
+        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        #self.dbgcom.send_debugmessage("stdout_manager2: " + repr(stdout_manager.stdout_cache))
+        #
+        id = stdout_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic] = id
-    
+
     def trace_dispatch(self, frame, event, arg):
         # debug("trace_dispatch")
         return pdb.Pdb.trace_dispatch(self, frame, event, arg)
@@ -936,14 +952,9 @@ class Epdb(pdb.Pdb):
                     else:
                         debug("Error: No key found for set resources")
                         return
-            #debug("Key {0} for resource {1}".format(res, resource))
-            #debug("k: ", k)
+                    
             manager = dbg.current_timeline.get_manager(k)
-            #debug("manager: ", manager)
             manager.restore(res)
-            #for rk in resource:
-            #    debug(" ", rk, resource[rk])
-            #debug(k)
             
     def cmd_print(self, arg):
         try:
@@ -1039,25 +1050,20 @@ class Epdb(pdb.Pdb):
                 continued[(filename, lineno)] = [dbg.ic]
                 
         if self.running_mode == 'continue':
-            #debug("running mode continue")
             if dbg.mode == 'redo':
                 setmode()
             if dbg.mode == 'normal':
                 if self.break_here(frame):
                     setmode()
-                    #debug("user_line interaction")
                     self.interaction(frame, None)
         elif self.running_mode == 'next':
             setmode()
             if self.break_here(frame):
                 self.stopnocalls = None
-                #debug("user_line interaction")
                 if dbg.mode == 'redo':
                     self.set_resources()
                 self.interaction(frame, None)
             elif self.stopnocalls and self.nocalls <= self.stopnocalls:
-                #setmode()
-                #debug("user_line interaction")
                 if dbg.mode == 'redo':
                     self.set_resources()
                 self.interaction(frame, None)
@@ -1066,27 +1072,24 @@ class Epdb(pdb.Pdb):
             if dbg.mode == 'redo':
                 self.set_resources()
             self.interaction(frame, None)
-        elif self.running_mode == 'stopafter':
-            #debug("STOPAFTER USERLINE", "stopafter:", self.stopafter, "ic", dbg.ic)
-            if self.stopafter <= 0:
+        elif self.running_mode == 'stop_at_ic':
+            if self.stop_at_ic <= dbg.ic:
+                # Stop here but some variables before stopping
                 if dbg.current_timeline.get_max_ic() > dbg.ic:
                     dbg.mode = 'redo'
                 else:
                     dbg.mode = 'normal'
-                if dbg.mode == 'redo':
-                    self.set_resources()
-                #debug("stopafteruserline interaction")
+                self.set_resources()
                 self.interaction(frame, None)
             else:
-                self.stopafter -= 1
                 setmode()
+        elif self.running_mode == 'stopafter':
+            self.dbgcom.send_debugmessage("stopafter mode shouldn't be used. 33")
         else:
-            #debug("running mode else")
             self.interaction(frame, None)
         self.starttime = time.time()
         
     def user_call(self, frame, argument_list):
-        #debug("user_call")
         self.call_stack.append(dbg.ic)
         nextd = dbg.current_timeline.get_next()
         self.nocalls += 1
@@ -1127,17 +1130,15 @@ class Epdb(pdb.Pdb):
         for sid in snapshots:
             s = self.snapshots[sid]
             if ic == s.ic:
-                debug("This ic already has an instruction count")
+                self.dbgcom.send_debugmessage("This ic already has an instruction count")
                 return
             
         r = self.make_snapshot()
-        #debug("Ic after:", ic)
-        #debug("self.stopafter:", self.stopafter)
-        #debug("make return:", r)
-        #debug("self.running mode", self.running_mode)
-        if self.stopafter > 0:
-            self.stopafter -= 1
+        
+        #if self.stopafter > 0:
+        #    self.stopafter -= 1
         if r == "snapshotmade":
+            self.dbgcom.send_debugmessage("Made snapshot")
             self.dbgcom.send_lastline(self.lastline)
             return
 
@@ -1145,24 +1146,33 @@ class Epdb(pdb.Pdb):
         # Note: This works for some reason for the other modes. However,
         # I am not sure if it works in every case (e.g.: if some other command
         # sets a different mode than set_step)
-        if self.running_mode == 'stopafter' and self.stopafter == -1:
+        self.dbgcom.send_debugmessage("go to line: " + str(dbg.ic + max(self.stopafter, 0)))
+        self.dbgcom.send_debugmessage("snapshot activated with running_mode: " + str(self.running_mode))
+        if self.running_mode == 'stop_at_ic' and self.stop_at_ic == dbg.ic:
             self.preprompt()
             self.dbgcom.send_lastline(self.lastline)
+            self.dbgcom.send_debugmessage("Set lastline: " + self.lastline)
             self.running_mode = None
             self.set_resources()
+            return
+        elif self.running_mode == 'stop_at_ic':
+            return 1
+        else:
+            self.dbgcom.send_debugmessage("ELSE: running_mode: " + self.running_mode + " stopafter: " + str(self.stopafter))
+        self.dbgcom.send_debugmessage("Snapshot return: " + str(r) + " ic: " + str(dbg.ic))
         return r
     
-    def cmd_restore(self, arg):
-        """Restore a previous Snapshot, e.g. restore 0"""
-        # TODO leave current timeline and go into roff mode
-        try:
-            id = int(arg)
-        except:
-             debug('You need to supply an index, e.g. restore 0')
-             return
-            
-        self.mp.activatesp(id)
-        raise EpdbExit()
+    #def cmd_restore(self, arg):
+    #    """Restore a previous Snapshot, e.g. restore 0"""
+    #    # TODO leave current timeline and go into roff mode
+    #    try:
+    #        id = int(arg)
+    #    except:
+    #         debug('You need to supply an index, e.g. restore 0')
+    #         return
+    #        
+    #    self.mp.activatesp(id)
+    #    raise EpdbExit()
     
     def cmd_continued(self, arg):
         continued = dbg.current_timeline.get_continue()
@@ -1217,7 +1227,7 @@ class Epdb(pdb.Pdb):
         self.dbgcom.send_timeline_switched(timeline.get_name())
         dbg.current_timeline = timeline
         s = self.findsnapshot(ic)
-        self.mp.activatesp(s.id, ic - s.ic)
+        self.mp.activateic(s.id, ic)
         raise EpdbExit()
         
     def cmd_current_timeline(self, arg):
@@ -1299,9 +1309,8 @@ class Epdb(pdb.Pdb):
             debug("No snapshot made. Can't step back")
             return
         
-        steps = dbg.ic - s.ic - 1
         #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
-        self.mp.activatesp(s.id, steps)
+        self.mp.activateic(s.id, dbg.ic - 1)
         raise EpdbExit()
         
     def cmd_rnext(self, arg):
@@ -1324,18 +1333,13 @@ class Epdb(pdb.Pdb):
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
         bpic = self.findprecedingbreakpointic()
         nextic = max(nextic, bpic)
-        #debug('old nextic', nextic)
-        #nextic = dbg.current_timeline.get_rnext().get(dbg.ic, dbg.ic-1)
-        #debug('new nextic', nextic)
         
         s = self.findsnapshot(nextic)
         if s == None:
             debug("No snapshot made. Can't step back")
             return
         
-        steps = nextic - s.ic
-        #debug('snapshot activation', s.id, steps)
-        self.mp.activatesp(s.id, steps)
+        self.mp.activateic(s.id, nextic)
         raise EpdbExit()
         
     def cmd_rcontinue(self, arg):
@@ -1361,9 +1365,7 @@ class Epdb(pdb.Pdb):
             debug("No snapshot made. Can't step back")
             return
             
-        steps = highestic - s.ic
-        #debug('snapshot activation', s.id, steps)
-        self.mp.activatesp(s.id, steps)
+        self.mp.activateic(s.id, highestic)
         raise EpdbExit()
         
     def set_next(self, frame):
@@ -1402,7 +1404,7 @@ class Epdb(pdb.Pdb):
                 return 1
             else:
                 #debug('snapshot activation', s.id, 0)
-                self.mp.activatesp(s.id, 0)
+                self.mp.activateic(s.id, dbg.ic+1)
                 raise EpdbExit()
         else:
             self.set_step()
@@ -1416,21 +1418,20 @@ class Epdb(pdb.Pdb):
             #debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
-            #debug("Next in redo mode")
+            debug("Next in redo mode")
             nextd = dbg.current_timeline.get_next()
-            #steps = nextd.get(dbg.ic, dbg.ic+1) - dbg-ic
             nextic = nextd.get(dbg.ic, "empty")
             bpic = self.findnextbreakpointic()
             
             if nextic == "empty":
                 # There is no function call in the current line -> same as stepping
-                #debug('Stepping next')
+                debug('nextic=empty')
                 s = self.findsnapshot(dbg.ic+1)
                 nextic = dbg.ic + 1
             elif nextic is None and bpic == -1:
                 # The next command has to switch to normal mode at some point
                 # Use the highest available snapshot
-                #debug("mode switch next")
+                debug("mode switch next")
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
                     #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
@@ -1444,6 +1445,7 @@ class Epdb(pdb.Pdb):
                     raise EpdbExit()
             else:
                 # The next ends in the current timeline and no mode switch is needed.
+                debug("no modeswitch next")
                 if nextic is None:
                     nextic = bpic
                 elif bpic == -1:
@@ -1465,7 +1467,7 @@ class Epdb(pdb.Pdb):
                 return 1
             else:
                 #debug('snapshot activation', s.id, s.ic - nextic)
-                self.mp.activatesp(s.id, s.ic - nextic)
+                self.mp.activateic(s.id, nextic)
                 raise EpdbExit()            
         else:
             self.command_running_start_time = time.time()
@@ -1496,7 +1498,7 @@ class Epdb(pdb.Pdb):
                 #debug("redo_cont: Breakpoint found", bestic)
                 # find snapshot and continue
                 s = self.findsnapshot(bestic)
-                self.mp.activatesp(s.id, bestic - s.ic)
+                self.mp.activateic(s.id, bestic)
                 raise EpdbExit()
         else:
             self.command_running_start_time = time.time()
@@ -1567,7 +1569,8 @@ class Epdb(pdb.Pdb):
 
         steps = 0
         #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
-        self.mp.activatesp(s.id, steps)
+        #self.mp.activatesp(s.id, steps)
+        self.mp.activateic(s.id, self.snapshots[sid].ic)
         raise EpdbExit()
 
     def dispatch_call(self, frame, arg):
@@ -1898,6 +1901,18 @@ class Epdb(pdb.Pdb):
     def cmd_commands(self, arg):
         """Not supported yet"""
         # because epdbs implementation calls the blocking cmdloop there
+    
+    def _getval(self, arg):
+        try:
+            return eval(arg, self.curframe.f_globals, self.curframe_locals)
+        except:
+            t, v = sys.exc_info()[:2]
+            if isinstance(t, str):
+                exc_type_name = t
+            else:
+                exc_type_name = t.__name__
+            #print('***', exc_type_name + ':', repr(v), file=self.stdout)
+            raise
     
     def interaction(self, frame, traceback):
         self.setup(frame, traceback)

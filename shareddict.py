@@ -73,9 +73,11 @@ class ServerList(list):
 class ServerTimeline:
     def __init__(self, timelines, name="main", snapshots=[], nde=None, ude=None,
                  ic=0,
-                 next=None, cont=None, resources=None, managers=None
+                 next=None, cont=None, resources=None, managers=None,
+                 stdout_cache = ""
                  #, rnext=None, rcontinue=None
                  ):
+        self.stdout_cache = stdout_cache
         self.snapshots = snapshots
         self.timelines = timelines
         self.name = name
@@ -120,7 +122,7 @@ class ServerTimeline:
         else:
             self.managers = ServerDict()
         timelines.managers_dict[name] = self.managers
-    
+
     def _add_by_id(self, snapshotid):
         try:
             self.timelines.snapshotdict[snapshotid].references += 1
@@ -171,10 +173,7 @@ class ServerTimeline:
                 resources[(typ,location)] = resource
                 managers[(typ,location)] = oldmanagers[(typ,location)]
             #debug("resource:", resource)
-            
-        #debug("resources", resources)
-        #debug("managers", managers)
-        #managers = {k:oldmanagers[k] for k in oldmanagers if k < ic}
+       
         snapshots = []
         for sid in self.snapshots:
             sdata = self.timelines.snapshotdict[sid]
@@ -182,7 +181,8 @@ class ServerTimeline:
             if sic <= ic:
                 snapshots.append(sid)
         copy = ServerTimeline(self.timelines, name, snapshots, nde=nde,
-                              ude=ude, resources=resources, managers=managers)
+                              ude=ude, resources=resources, managers=managers,
+                              stdout_cache=self.stdout_cache)
         for k in snapshots:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
@@ -265,6 +265,22 @@ class ServerTimeline:
         return self.managers[identification]
         #return "managers." + self.name + "." + type + "." + enclocation
 
+    def update_manager(self, identification, manager):
+        if identification in self.managers:
+            self.managers[identification] = manager
+        else:
+            raise
+        
+    def update_stdout_cache(self, text):
+        self.stdout_cache += text
+    
+    def get_stdout_cache(self):
+        return self.stdout_cache
+    
+    def set_stdout_cache(self, text):
+        self.stdout_cache = text
+    
+        
 class ServerTimelines:
     def __init__(self, snapshotdict, nde_dict, ude_dict
                  #,rnext_dict, rcontinue_dict
@@ -713,6 +729,19 @@ class TimelineProxy:
     def get_manager(self, identification):
         return self._remote_invoke('get_manager',(identification,), {})
 
+    def update_manager(self, identification, manager):
+        return self._remote_invoke('update_manager',(identification, manager), {})
+
+    def update_stdout_cache(self, text):
+        return self._remote_invoke('update_stdout_cache',(text,), {})
+
+    def get_stdout_cache(self):
+        return self._remote_invoke('get_stdout_cache',(), {})
+
+    def set_stdout_cache(self, text):
+        return self._remote_invoke('set_stdout_cache',(text,), {})
+
+        
 class TimelinesProxy:
     def __init__(self, objref="timelines", conn=None):
         if conn:
@@ -751,7 +780,7 @@ class TimelinesProxy:
     
     def show(self):
         return self._remote_invoke('show',(), {})
-            
+
 def shutdown():
     #debug("Shutting down")
     conn = connect('/tmp/shareddict')

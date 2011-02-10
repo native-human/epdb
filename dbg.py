@@ -5,7 +5,7 @@ import sys
 import _thread
 
 def is_dbg_callee():
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py"]:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py", "configparser.py", "posixpath.py"]:
         return True
     return False
 
@@ -31,7 +31,7 @@ current_timeline = None
 
 # The stdout resource
 #stdout_resource = None
-stdout_resource_manager = None
+#stdout_resource_manager = None
 
 # tempdir is the temporary file used by all the processes. tempdir is setted on startup.
 tempdir = None
@@ -54,6 +54,8 @@ undod = {}
 #server = None
 
 modules = []
+
+stdout_cache = ''
 
 ic = 0
 # maximum ic in current timeline.

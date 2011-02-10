@@ -76,6 +76,20 @@ class Snapshot:
                         dbg.nde = dbg.current_timeline.get_nde()
                         dbg.undod = dbg.current_timeline.get_ude()
                         break
+
+                if cmd == "runic":
+                    ic = int(args[1])
+                    rpid = os.fork()
+                    if rpid:
+                        self.cpids.append(rpid)
+                    else:
+                        self.activation_type = "stop_at_ic"
+                        self.stop_at_ic = ic
+                        dbg.current_timeline = dbg.timelines.get_current_timeline()
+                        dbg.nde = dbg.current_timeline.get_nde()
+                        dbg.undod = dbg.current_timeline.get_ude()
+                        break
+                
                 elif cmd == "runnext":
                     # Run until a given nocalls is reached
                     nocalls = int(args[1])
@@ -166,6 +180,9 @@ class SavepointConnection:
     def activate(self, steps=-1):
         self.msging.send('run {0}'.format(steps))
         
+    def activateic(self, ic):
+        self.msging.send('runic {0}'.format(ic))
+        
     def activatenext(self, nocalls):
         self.msging.send('runnext {0}'.format(nocalls))
         
@@ -241,6 +258,16 @@ class MainProcess:
                                     break
                             sp = self.savepoint_connections[spid]
                             sp.activate(steps)
+                        
+                        elif cmd == 'activateic':
+                            ssid = int(words[1])
+                            ic = int(words[2])
+                            for s in self.savepoint_connections: # TODO rename savepoint connection
+                                if s.id == ssid:
+                                    sp = s
+                                    break
+                            sp = self.savepoint_connections[ssid]
+                            sp.activateic(ic)
                             
                         elif cmd == 'activatenext':
                             ssid = int(words[1])
@@ -323,6 +350,10 @@ class MainProcess:
         self.debuggee.send('activate {0} {1}'.format(id,steps))
         self.debuggee.close()
         #sys.exit(0)
+        
+    def activateic(self, id, ic):
+        self.debuggee.send('activateic {0} {1}'.format(id,ic))
+        self.debuggee.close()
         
     def activatenext(self, id, nocalls):
         self.debuggee.send('activatenext {0} {1}'.format(id,nocalls))
