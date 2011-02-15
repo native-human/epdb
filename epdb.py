@@ -7,12 +7,9 @@ import bdb
 from reprlib import Repr
 import os
 import os.path
-import re
-import pprint
 import traceback
 import snapshotting
 import builtins
-import types
 import _thread
 import configparser
 import shareddict
@@ -24,7 +21,6 @@ import io
 import socket
 from debug import debug
 #from debug import sendcmd
-from reprlib import Repr
 import string
 import imp
 
@@ -81,7 +77,7 @@ def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
             
             # if the name doesn't exist in the original file -> ignore it
             try:
-                setattr(mod, '__orig__'+key, getattr(mod,key))
+                setattr(mod, '__orig__'+key, getattr(mod, key))
                 setattr(mod, key, getattr(module, key))
             except AttributeError:
                 pass
@@ -128,7 +124,7 @@ def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
                     
                     # if the name doesn't exist in the original file -> ignore it
                     try:
-                        setattr(mod, '__orig__'+key, getattr(mod,key))
+                        setattr(mod, '__orig__'+key, getattr(mod, key))
                         setattr(mod, key, getattr(module, key))
                     except AttributeError:
                         pass
@@ -176,7 +172,7 @@ class UdsDbgCom():
         return self.debugger.cmd_print(arg)
     do_print = do_p
 
-    def do_set_resources(self, args):
+    def do_set_resources(self, arg):
         return self.debugger.cmd_set_resources(arg)
         
     def do_snapshot(self, arg, temporary=0):
@@ -350,7 +346,7 @@ class UdsDbgCom():
             else:
                 self.sock.send(bline+b"\r\n")
         except socket.error:
-            print("socket.error")
+            #print("socket.error")
             self.onecmd('quit')
         
 
@@ -372,7 +368,7 @@ class UdsDbgCom():
             except EOFError:
                 line = 'EOF'
 
-            firstline,_,line = line.partition(b"\r\n")
+            firstline, _, line = line.partition(b"\r\n")
             firstline = firstline.decode("UTF-8")
             firstline = firstline.rstrip('\r\n')
             #print("Received Line:", firstline)
@@ -431,7 +427,6 @@ class UdsDbgCom():
         
     def send_stdout(self, stdout):
         self.send("clear_stdout#\r\n")
-        lines = stdout.splitlines()
         for line in stdout:
             self.send("add_stdout_line#"+line+'\r\n')
     
@@ -456,7 +451,7 @@ class UdsDbgCom():
         self.send("debugmessage#" + message + "\r\n")
 
 
-class StdDbgCom(cmd.Cmd):
+class StdDbgCom(asyncmd.Asyncmd):
     def __init__(self, debugger):
         asyncmd.Asyncmd.__init__(self)
         self.debugger = debugger
@@ -467,7 +462,7 @@ class StdDbgCom(cmd.Cmd):
         return self.debugger.cmd_print(arg)
     do_print = do_p
 
-    def do_set_resources(self, args):
+    def do_set_resources(self, arg):
         return self.debugger.cmd_set_resources(arg)
         
     def do_snapshot(self, arg, temporary=0):
@@ -579,6 +574,8 @@ class StdDbgCom(cmd.Cmd):
 
     def precmd(self, line):
         """Handle alias expansion and ';;' separator."""
+        if not line:
+            return
         if not line.strip():
             return line
         args = line.split()
@@ -618,7 +615,7 @@ class StdDbgCom(cmd.Cmd):
             self.send_raw("time: ", time)
  
     def send_var(self, varname, value):
-        self.send_raw("var#", varname, "#", value,'#', sep='')
+        self.send_raw("var#", varname, "#", value, '#', sep='')
    
     def send_varerr(self, varname):
         self.send_raw("varerror#", varname)
@@ -633,19 +630,19 @@ class StdDbgCom(cmd.Cmd):
         # resources [(resource_type, resource_location, [(id, ic), ...]), ...]
         self.send_raw("show resources#")
         for rtype, rloc, rlist in resources:
-            self.send_raw('resource#', rtype,'#', rloc,'#',sep='')
+            self.send_raw('resource#', rtype, '#', rloc, '#', sep='')
             for rid, ric in rlist:
-                self.send_raw('resource_entry#', rtype,'#', rloc,'#',rid,'#', ric,'#', sep='')
+                self.send_raw('resource_entry#', rtype, '#', rloc, '#', rid, '#', ric, '#', sep='')
            
     def send_timeline_snapshots(self, snapshot_list):
         self.send_raw("timeline_snapshots#")
         for snapshot in snapshot_list:
-            self.send_raw('tsnapshot#', snapshot.id, '#', snapshot.ic,'#',sep='')
+            self.send_raw('tsnapshot#', snapshot.id, '#', snapshot.ic, '#', sep='')
     
     def send_timeline_switched(self, timeline_name):
         self.send_raw("Switched to timeline#" + timeline_name)
          
-    def send_newtimeline_success(self,name):
+    def send_newtimeline_success(self, name):
         self.send_raw("newtimeline successful")
            
     def send_file_pos(self, formatted_line):
@@ -657,7 +654,13 @@ class StdDbgCom(cmd.Cmd):
     def send_stdout(self, stdout):
         self.send_raw("-->")
         self.send_raw(stdout, prefix="#->", end='')
-        
+
+    def send_break_nosuccess(self, filename, lineno, reason):
+        self.send_raw("error while making breakpoint")
+    
+    def send_break_success(self, number, filename, lineno):
+        self.send_raw("breakpoint made")
+      
     def send_program_finished(self):
         self.send_raw("Program has finished")
         
@@ -766,7 +769,7 @@ class Epdb(pdb.Pdb):
     def make_snapshot(self):
         # TODO make snapshot in roff and ron mode
         #fdebug("make snapshot", dbg.ic, self.snapshot_id)
-        stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        #stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
         
         snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
@@ -787,7 +790,7 @@ class Epdb(pdb.Pdb):
         if snapshot.activation_type == "step_forward":
             self.dbgcom.send_debugmessage("step_forward is deprecated. This activation shouldn't be used.")
         elif snapshot.activation_type == "stop_at_ic":
-            self.stop_at_ic = ic = snapshot.stop_at_ic
+            self.stop_at_ic = snapshot.stop_at_ic
             self.running_mode = "stop_at_ic"
             if dbg.ic == dbg.current_timeline.get_max_ic():
                 dbg.mode = 'normal'
@@ -863,18 +866,16 @@ class Epdb(pdb.Pdb):
         #debug("Going into post-mortem interaction mode", dbg.ic)
         dbg.mode = "post_mortem"
         self.set_resources()
-        self.is_postmortem=True
+        self.is_postmortem = True
         #self.cmdloop()
         self.interaction(self.lastframe, None)
         
     def init_reversible(self):
-        #self.command_run
-        ning_start_time = time.time()
+        #self.command_running_start_time = time.time()
         self.command_running_start_time = None
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
         self.mp = snapshotting.MainProcess()
-        from breakpoint import Breakpoint
         #self.ic = 0             # Instruction Counter
         self.ron = True
         
@@ -971,8 +972,9 @@ class Epdb(pdb.Pdb):
         but only if we are to stop at or just below this level."""
         exc_type, exc_value, exc_traceback = exc_info
         frame.f_locals['__exception__'] = exc_type, exc_value
-        exc_type_name = exc_type.__name__
-        print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
+        # TODO do some alternative notification than print
+        #exc_type_name = exc_type.__name__
+        #print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
         self.interaction(frame, exc_traceback)
@@ -998,9 +1000,9 @@ class Epdb(pdb.Pdb):
         #debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
         dbg.ic += 1
         try:
-            lineno=frame.f_lineno
+            lineno = frame.f_lineno
         except:
-            lineno="err"
+            lineno = "err"
         #debug("user line: ", dbg.ic, lineno)
         # TODO only make snapshots in normal mode?
         
@@ -1043,7 +1045,7 @@ class Epdb(pdb.Pdb):
         if dbg.mode == 'normal':
             continued = dbg.current_timeline.get_continue()
             try:
-                l = continued[(filename,lineno)]
+                l = continued[(filename, lineno)]
                 l.append(dbg.ic)
                 continued[(filename, lineno)] = l
             except:
@@ -1192,7 +1194,7 @@ class Epdb(pdb.Pdb):
             rl = []
             for rid in resource:
                 rl.append((rid, resource[rid]))
-            l.append((k[0],k[1], rl))
+            l.append((k[0], k[1], rl))
         self.dbgcom.send_resources(l)
                 #type, location, id, ic
 
@@ -1218,7 +1220,7 @@ class Epdb(pdb.Pdb):
         try:
             timeline = dbg.timelines.get(arg)
         except:
-            debug("Timeline '",arg,"' doesn't exist", sep='')
+            debug("Timeline '", arg, "' doesn't exist", sep='')
             return    
         dbg.current_timeline.deactivate(dbg.ic)
         ic = timeline.get_ic()
@@ -1297,8 +1299,6 @@ class Epdb(pdb.Pdb):
             self.dbgcom.send_message("At the beginning of the program. Can't step back.")
             #debug("At the beginning of the program. Can't step back")
             return
-        
-        actual_ic = dbg.ic
         
         s = self.findsnapshot(dbg.ic-1)
         if s == None:
@@ -1556,7 +1556,6 @@ class Epdb(pdb.Pdb):
         if dbg.ic > dbg.current_timeline.get_max_ic():
             dbg.current_timeline.set_max_ic(dbg.ic)
 
-        actual_ic = dbg.ic
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             s = self.snapshots[sid]
@@ -1567,7 +1566,6 @@ class Epdb(pdb.Pdb):
             debug("Snapshot not found in timeline")
             return
 
-        steps = 0
         #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
         #self.mp.activatesp(s.id, steps)
         self.mp.activateic(s.id, self.snapshots[sid].ic)
@@ -1585,7 +1583,9 @@ class Epdb(pdb.Pdb):
             # No need to trace this function
             return # None
         self.user_call(frame, arg)
-        if self.quitting: raise BdbQuit
+        if self.quitting:
+            raise EpdbExit
+            #raise BdbQuit
         return self.trace_dispatch
     
     # The following functions are the same as in bdp except for
@@ -1624,7 +1624,7 @@ class Epdb(pdb.Pdb):
                   funcname=None):
         from breakpoint import Breakpoint
         filename = self.canonic(filename)
-        import linecache # Import as late as possible
+        #import linecache # Import as late as possible
         line = linecache.getline(filename, lineno)
         if not line:
             #debug("END")
@@ -1636,8 +1636,8 @@ class Epdb(pdb.Pdb):
         if not lineno in list:
             list.append(lineno)
             self.breaks[filename] = list  # This is necessary for the distributed application
-        bp = Breakpoint(filename, lineno, temporary, cond, funcname)
-        #debug('END')
+        Breakpoint(filename, lineno, temporary, cond, funcname)
+        #bp = Breakpoint(filename, lineno, temporary, cond, funcname)
 
     def clear_break(self, filename, lineno):
         from breakpoint import Breakpoint
@@ -1651,17 +1651,17 @@ class Epdb(pdb.Pdb):
         # If there's only one bp in the list for that file,line
         # pair, then remove the breaks entry
         for bp in Breakpoint.bplist[filename, lineno][:]:
-            debug("delete Me")
+            #debug("delete Me")
             bp.deleteMe()
         if (filename, lineno) not in Breakpoint.bplist:
-            debug("delete self.breaks")
+            #debug("delete self.breaks")
             l = self.breaks[filename]
             l.remove(lineno)
             self.breaks[filename] = l
             #self.breaks[filename].remove(lineno)
         if not self.breaks[filename]:
             del self.breaks[filename]
-        debug("self.breaks: ", self.breaks)
+        #debug("self.breaks: ", self.breaks)
 
 
     def clear_bpbynumber(self, arg):
@@ -1734,7 +1734,7 @@ class Epdb(pdb.Pdb):
         # break [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
             if self.breaks:  # There's at least one
-                print("Num Type         Disp Enb   Where", file=self.stdout)
+                #print("Num Type         Disp Enb   Where", file=self.stdout)
                 for bp in Breakpoint.bpbynumber:
                     if bp:
                         bp.bpprint(self.stdout)
@@ -1765,7 +1765,7 @@ class Epdb(pdb.Pdb):
             arg = arg[colon+1:].lstrip()
             try:
                 lineno = int(arg)
-            except ValueError as msg:
+            except ValueError:
                 debug('*** Bad lineno:', arg)
                 self.dbgcom.send_break_nosucess(filename, lineno, "Bad lineno")
                 return
@@ -1824,7 +1824,7 @@ class Epdb(pdb.Pdb):
         """
         line = linecache.getline(filename, lineno, self.curframe.f_globals)
         if not line:
-            print('End of file', file=self.stdout)
+            #print('End of file', file=self.stdout)
             return 0
         line = line.strip()
         # Don't allow setting breakpoint at a blank line
@@ -1867,7 +1867,7 @@ class Epdb(pdb.Pdb):
             try:
                 i = int(i)
             except ValueError:
-                print('Breakpoint index %r is not a number' % i, file=self.stdout)
+                #print('Breakpoint index %r is not a number' % i, file=self.stdout)
                 continue
 
             if not (0 <= i < len(Breakpoint.bpbynumber)):
@@ -1878,7 +1878,7 @@ class Epdb(pdb.Pdb):
             if err:
                 debug('***', err)
             else:
-                debug('Deleted breakpoint', i)
+                #debug('Deleted breakpoint', i)
                 self.dbgcom.send_clear_success(i)
         
     def print_stack_trace(self):
@@ -1911,22 +1911,18 @@ class Epdb(pdb.Pdb):
                 exc_type_name = t
             else:
                 exc_type_name = t.__name__
+            # TODO: do something different than using print here
             #print('***', exc_type_name + ':', repr(v), file=self.stdout)
             raise
     
     def interaction(self, frame, traceback):
         self.setup(frame, traceback)
         self.print_stack_entry(self.stack[self.curindex])
-        #r = False
-        #self.cmdloop()
-        #while not r:
-        #    r = self.asyncmdloop()
         self.dbgcom.get_cmd()
         self.forget()
     
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
-    from breakpoint import Breakpoint
     """Determine which breakpoint for this file:line is to be acted upon.
 
     Called only if we know there is a bpt at this
@@ -1934,7 +1930,8 @@ def effective(file, line, frame):
     that indicates if it is ok to delete a temporary bp.
 
     """
-    possibles = Breakpoint.bplist[file,line]
+    from breakpoint import Breakpoint
+    possibles = Breakpoint.bplist[file, line]
     for i in range(0, len(possibles)):
         b = possibles[i]
         if b.enabled == 0:
@@ -1952,7 +1949,7 @@ def effective(file, line, frame):
             else:
                 # breakpoint and marker that's ok
                 # to delete if temporary
-                return (b,1)
+                return (b, 1)
         else:
             # Conditional bp.
             # Ignore count applies only to those bpt hits where the
@@ -1965,7 +1962,7 @@ def effective(file, line, frame):
                         b.ignore = b.ignore -1
                         # continue
                     else:
-                        return (b,1)
+                        return (b, 1)
                 # else:
                 #   continue
             except:
@@ -1974,7 +1971,7 @@ def effective(file, line, frame):
                 # regardless of ignore count.
                 # Don't delete temporary,
                 # as another hint to user.
-                return (b,0)
+                return (b, 0)
     return (None, None)
 
 def run(statement, globals=None, locals=None):
