@@ -27,10 +27,10 @@ class Savepoint:
                 if item == "run":
                     print("Running not implemented yet")
                     break
-    
+
     def run(self):
         self.queue.put("run")
-    
+
 class ControllerProcess:
     def __init__(self):
         self.queue = multiprocessing.Queue()
@@ -40,11 +40,11 @@ class ControllerProcess:
                 item = self.queue.get()
         else:
             pass
-                
+
     def createsavepoint(self):
         self.queue.put("create")
-        
-    
+
+
 class Savepoints:
     def __init__(self):
         pass
@@ -63,7 +63,7 @@ def save():
     #    print("child pause")
     #    signal.pause()
     #    print("child pause ended")
-    
+
 def restore():
     os.kill(pid, signal.SIGCONT)
     print("child restore")

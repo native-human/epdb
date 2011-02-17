@@ -26,7 +26,7 @@ def partition(lst, pivot):
         else:
             middle.append(e)
     return left, middle, right
-    
+
 def quicksort(lst):
     if len(lst) <= 1:
         return lst

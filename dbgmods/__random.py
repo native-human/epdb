@@ -27,7 +27,7 @@ import debug as log
 #        return redo(a, b)
 #    elif dbg.mode == 'undo':
 #        return
-   
+
 def seed(a=None):
     if dbg.mode == 'normal':
         random.__orig__seed(a)

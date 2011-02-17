@@ -76,14 +76,14 @@ class FileProxy:
         elif dbg.mode == 'replay' or dbg.mode == 'redo':
             "This should never happen"
             #value = self.__file__.write(b)
-        
+
     def read(self, n=-1):
         if dbg.mode == 'normal':
             dbg.snapshottingcontrol.set_make_snapshot()
             value = self.__file__.read(n)
             return value
         # else: "This should never happen because of forward activation"
-   
+
     def close(self):
         if dbg.mode == 'normal':
             self.__file__.close()

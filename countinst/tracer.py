@@ -24,7 +24,7 @@ def tracefunc(frame, event, arg):
         return tracefunc
     else:
         print('unexpected event {0}'.format(event))
-        
+
     return tracefunc
 
 class Tracer:

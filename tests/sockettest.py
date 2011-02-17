@@ -11,12 +11,12 @@ SOCK_NAME = "/tmp/socketname"
 log = logging.getLogger('socket.test')
 log.addHandler(logging.StreamHandler(sys.stderr))
 log.setLevel(logging.DEBUG)
-    
+
 class Savepoint:
     def __init__(self):
         #log.info('Savepoint fork')
         #log.info('parentpid: %d %d' % (pid, os.getpid()))
-        
+
         # This is done before forking because of synchronization
         self.cpids = []
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -26,7 +26,7 @@ class Savepoint:
         if sck.myrecv() != 'ok':
             # TODO better Error handling
             raise Exception()
-        
+
         pid = os.fork()
         self.pid = pid
         if pid:
@@ -46,13 +46,13 @@ class Savepoint:
                     rpid = os.fork()
                     if rpid:
                         self.cpids.append(rpid)
-                    else:    
+                    else:
                         #log.info("Child process runs")
                         break
         else:
             log.info('childpid %d'% pid)
             pass
-    
+
 class Mysocket:
     def __init__(self, sock=None):
         self.MSG_LEN = 15
@@ -71,7 +71,7 @@ class Mysocket:
         if len(msg) < self.MSG_LEN:
             trail = b'\n' * (self.MSG_LEN - len(msg))
             msg = msg + trail
-            
+
         #log.info('____')
         #log.info(msg)
         #log.info('____')
@@ -82,7 +82,7 @@ class Mysocket:
             if sent == 0:
                 raise RuntimeError("socket connection broken")
             totalsent = totalsent + sent
-            
+
     def myrecv(self):
         msg = b''
         while len(msg) < self.MSG_LEN:
@@ -101,14 +101,14 @@ class Mysocket:
 class SavepointConnection:
     def __init__(self, mysocket):
         self.mysocket = mysocket
-    
+
     def respond(self):
         cmd = self.mysocket.myrecv()
         logging.info('cmd')
-    
+
     def activate(self):
         self.mysocket.mysend('run')
-    
+
     def quit(self):
         self.mysocket.mysend('close')
 
@@ -142,9 +142,9 @@ class MainProcess:
                         sys.exit(0)
                 for event in list:
                     fd, ev = event
-                    
+
                     # Controller Code
-                    
+
                     if fd == controller.sock.fileno():
                         #log.info('controller fd: %d' % controller.sock.fileno())
                         line = controller.myrecv()
@@ -174,7 +174,7 @@ class MainProcess:
                             sp.activate()
                         else:
                             log.info(cmd)
-                            
+
                     # New Savepoint/Debuggee Connection
                     elif fd == sp_sock.fileno():
                         #log.info('new connection')
@@ -188,7 +188,7 @@ class MainProcess:
                             #log.info('savepoint added')
                             if self.do_quit:
                                 sp.quit()
-                        
+
                         elif type == 'debuggee':
                             # TODO remove
                             pass
@@ -208,27 +208,27 @@ class MainProcess:
                             sys.exit(0)
         else:
             pass
-    
+
     def list_savepoints(self):
         self.debuggee.mysend('showlist')
-    
+
     def quit(self):
         self.debuggee.mysend('end')
-        
+
     def activatesp(self, idx=0):
         # TODO idx
         self.debuggee.mysend('activate 0')
         self.debuggee.close()
         sys.exit(0)
-        
-      
+
+
 mp = MainProcess()
- 
+
 log.info("line1")
 log.info("Create Savepoint")
 sp1 = Savepoint()
 log.info("Savepoint created")
-log.info("line2") 
+log.info("line2")
 
 mp.list_savepoints()
 
@@ -238,11 +238,11 @@ if skip != 'True':
     mp.activatesp()
 log.info('Skipped: "%s"'%skip)
 #mp.list_savepoints()
- 
-log.info('last') 
- 
+
+log.info('last')
+
 #log.info('Show list')
-#mp.list_savepoints() 
+#mp.list_savepoints()
 
 mp.quit()
 

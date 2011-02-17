@@ -23,10 +23,10 @@ class PyDb:
             globals = __main__.__dict__
         if locals is None:
             locals = globals
-        
+
         #self.reset()
         linecache.checkcache()
-        
+
         sys.settrace(self.tracefunc)
         if not isinstance(cmd, types.CodeType):
             cmd = cmd+'\n'
@@ -66,10 +66,9 @@ class PyDb:
             frame.f_trace = self.tracefunc
             frame = frame.f_back
         sys.settrace(self.tracefunc)
-    
+
 if __name__ == '__main__':
-    
+
     filename = sys.argv[1]
     pydb = PyDb()
     pydb._runscript(filename)
-    

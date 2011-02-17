@@ -18,7 +18,7 @@ def _close(self):
     self.lckfile.close()
 
 def safe_shelve_open(filename, flag='c', protocol=None, writeback=False, block=True, lckfilename=None):
-    """Open the sheve file, createing a lockfile at filename.lck.  If 
+    """Open the sheve file, createing a lockfile at filename.lck.  If
     block is False then a IOError will be raised if the lock cannot
     be acquired"""
     if lckfilename == None:
@@ -35,7 +35,7 @@ def safe_shelve_open(filename, flag='c', protocol=None, writeback=False, block=T
 
     shelf = shelve.open(filename, flag, protocol, writeback)
     shelf.close = _close.__get__(shelf, shelve.Shelf)
-    shelf.lckfile = lckfile 
+    shelf.lckfile = lckfile
     return shelf
 
 def orig_open(*args, **kargs):
@@ -50,12 +50,12 @@ class StdoutResourceManager:
             self.shelvename = shelvename
         else:
             self.shelvename = os.path.join(tempdir, "__stdout__")
-        
+
         if stdout_cache:
             self.stdout_cache = stdout_cache
         else:
             self.stdout_cache = ""
-            
+
     def save(self):
         id = uuid4().hex
         db = safe_shelve_open(self.shelvename)
@@ -72,17 +72,17 @@ class StdoutResourceManager:
         dbg.current_timeline.set_stdout_cache(cache)
         db.close()
         dbg.dbgcom.send_stdout(cache)
-        
+
     def update_stdout(self, output):
         dbg.current_timeline.update_stdout_cache(output)
         #dbg.stdout_cache += output
         #self.stdout_cache += output
         #dbg.dbgcom.send_debugmessage("Update stdout: " + repr(self.stdout_cache) + " " + repr(output))
         #dbg.current_timeline.update_manager(('__stdout__',''), self)
-        
+
     def __reduce__(self):
-        return (StdoutResourceManager, (self.shelvename, self.stdout_cache))       
-    
+        return (StdoutResourceManager, (self.shelvename, self.stdout_cache))
+
 class FileResourceManager:
     def __init__(self, filename):
         tempdir = dbg.tempdir
@@ -91,21 +91,21 @@ class FileResourceManager:
             )
         self.shelvename = shelvename
         self.filename = filename
-    
+
     def save(self):
         id = uuid4().hex
         db = safe_shelve_open(self.shelvename)
         db[id] = orig_open(self.filename).read()
         db.close()
         return id
-    
+
     def restore(self, id):
         db = safe_shelve_open(self.shelvename)
         content = db[id]
         db.close()
         with orig_open(self.filename, 'w') as f:
             f.write(content)
-        
+
     def __reduce__(self):
         return (FileResourceManager, (self.filename,))
 

@@ -8,11 +8,11 @@ class Asyncmd(cmd.Cmd):
         cmd.Cmd.__init__(self)
         self.loopstarted = False
         self.use_rawinput = False
-        
+
     def cmdloop(self, intro=None):
         #print("Asyncmd", intro)
         cmd.Cmd.cmdloop(self, intro)
-        
+
     def asyncmdloop(self, intro=None):
         if intro is not None:
             self.intro = intro
@@ -25,7 +25,7 @@ class Asyncmd(cmd.Cmd):
                 self.stdout.write(str(self.intro)+"\n")
             print(self.prompt, end='')
             sys.stdout.flush()
-            
+
         #if self.use_rawinput and self.completekey:
         #    try:
         #        import readline
@@ -34,11 +34,11 @@ class Asyncmd(cmd.Cmd):
         #        readline.parse_and_bind(self.completekey+": complete")
         #    except ImportError:
         #        pass
-            
+
         inp, _, _ = select.select([sys.stdin],[],[],0)
         if inp == []:
             return False
-        
+
         #self.preloop()
         try:
             stop = None
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     print("Hallo Welt")
     inp, _, _ = select.select([sys.stdin],[],[],0)
     print(inp)
-    
+
     class TestAsyncmd(Asyncmd):
         def do_quit(self, args):
             print("Quit")
@@ -104,7 +104,7 @@ if __name__ == '__main__':
             sys.stdout.flush()
         #def postcmd(self):
         #    print("Postcmd")
-    
+
     cmd = TestAsyncmd()
 
     #cmd.cmdloop()
@@ -116,10 +116,9 @@ if __name__ == '__main__':
         #print(i)
         #i = i+1
     #print(r)
-    
+
     #inp = [None]
     #while inp != []:
     #    inp, _, _ = select.select([sys.stdin],[],[],0)
     #    sys.stdin.read(1)
     #    #print(sys.stdin.read(1), end='\n')
-    

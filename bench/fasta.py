@@ -68,20 +68,20 @@ def randomFasta(table, n):
     width = 60
     rgs = randomGenState
     rlut = randomLUT
-    
+
     lut = makeLookupTable(table)
     big_buffer = []
     ba = big_buffer.append
-    
+
     for i in range(n):
         rgs = rlut[rgs]
         ba(lut[rgs])
-    
+
     s = ''.join(big_buffer)
     for i in range(width, n, width):
         print(s[i-width:i])
     print(s[i:])
-    
+
     randomGenState = rgs
 
 def main():
@@ -97,5 +97,5 @@ def main():
 
     print('>THREE Homo sapiens frequency')
     randomFasta(homosapiens, n*5)
-    
+
 main()

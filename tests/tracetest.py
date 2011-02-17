@@ -11,7 +11,7 @@ class side_effects:
         self.replay = replay
         self.undo = undo
     def __call__(self, func):
-        def newfunc(*args, **kargs):    
+        def newfunc(*args, **kargs):
             if mode == 'replay':
                 print('replay')
                 return self.replay(*args, **kargs)
@@ -23,7 +23,7 @@ class side_effects:
 
 def nothing(*args, **kargs):
     pass
-    
+
 @side_effects(replay=nothing, undo=nothing)
 def println(*args, **kargs):
     print(*args, **kargs)
@@ -67,7 +67,7 @@ def tracefunc(frame, event, arg):
         #print('Stacksize: ', str(frame.f_code.co_stacksize))
         #print('Flags: ', str(frame.f_code.co_flags))
         #print('Code: ', str(frame.f_code.co_code))
-        
+
         if frame.f_code.co_name == 'inp':
             print("inject code")
             print("Lineno: ", str(frame.f_lineno))
@@ -165,21 +165,21 @@ class X:
 #    x = 2 + 1
 #    return 'x'
 
-    
+
 def inp():
     print('Input')
     print('Input2')
 
 def empty():
     pass
-    
+
 inp()
 empty()
 
 #os.path.join("a","b")
 
 # x = input()
-    
+
 #print('Hello World')
 
 #x = 3 + 4 +34 +54

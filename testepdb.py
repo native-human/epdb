@@ -53,7 +53,7 @@ class TestClass:
         assert(a.ic == '202') # TODO here is some weired behavior of pdb (and therefore epdb)
         assert(a.mode == 'normal')
         assert(a.lineno == 5)
-        
-    
+
+
 tc = TestClass()
 tc.test_comprehensions()

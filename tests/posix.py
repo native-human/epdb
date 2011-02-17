@@ -28,14 +28,14 @@ print (libc.time(None))
 #                if item == "run":
 #                    print("Running not implemented yet")
 #                    break
-#    
+#
 #    def run(self):
 #        self.queue.put("run")
 
 class MainProcess:
     def __init__(self):
         self.start_main_process()
-    
+
     def start_main_process(self):
         debugee_queue = posix_ipc.MessageQueue(None, posix_ipc.O_EXCL|posix_ipc.O_CREAT)
         pid = os.fork()
@@ -56,7 +56,7 @@ class MainProcess:
             self.main_queue = main_queue = debugee_queue
             main_queue.send(pickle.dumps(("hello",None)))
             main_queue.send(pickle.dumps(("end",None)))
-        
+
 #class SavePoint:
 #    def __init__(self, mainprocess):
 #        self.queue = multiprocessing.Queue()
@@ -74,7 +74,7 @@ class MainProcess:
 #                if item == "run":
 #                    print("Running not implemented yet")
 #                    break
-#    
+#
 
 #mainprocess = MainProcess()
 

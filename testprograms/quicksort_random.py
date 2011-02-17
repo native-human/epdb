@@ -13,7 +13,7 @@ def partition(lst, pivot):
         else:
             middle.append(e)
     return left, middle, right
-    
+
 def quicksort(lst):
     if len(lst) <= 1:
         return lst
@@ -28,5 +28,5 @@ def quicksort(lst):
     return lst
 
 l = [random.randint(0,100) for e in range(20)]
-quicksort(l)        
+quicksort(l)
 print(l)

@@ -14,7 +14,7 @@ def mergesort(f, left, right):
         tmpf1.write(leftpart)
         rightpart = f.read(right - middle)
         tmpf2.write(rightpart)
-    
+
         tmpf1.seek(0, SEEK_SET)
         tmpf2.seek(0, SEEK_SET)
         l = tmpf1.read(1)
@@ -34,18 +34,18 @@ def mergesort(f, left, right):
         tmpf2.close()
         print(buffer)
         print()
-    
+
     if right - left == 1:
         f.read(1)
         return
-    
+
     middle = left + math.trunc((right - left) / 2)
-    
+
     mergesort(f, left, middle)
     mergesort(f, middle, right)
     merge(left, middle, right)
-    
-        
+
+
 forig = builtins.open('testfile', 'r+')
 
 f = builtins.open('testfile2', 'w+')

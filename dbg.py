@@ -14,10 +14,10 @@ class SnapshottingControl:
         self._make_snapshot = False
     def set_make_snapshot(self):
         self._make_snapshot = True
-        
+
     def get_make_snapshot(self):
         return self._make_snapshot
-    
+
     def clear_make_snapshot(self):
         self._make_snapshot = False
 

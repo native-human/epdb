@@ -14,12 +14,12 @@ import re
 import traceback
 import _thread
 from debug import debug
-    
+
 def connect(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(address)
     return Connection(sock, address=address)
-    
+
 class Connection:
     def __init__(self, sock, address=None):
         self.sock = sock
@@ -38,14 +38,14 @@ class Connection:
         return ret
     def close(self):
         self.sock.close()
-        
-    
+
+
 def listen(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(address)
     sock.listen(5)
     return Listener(sock)
-    
+
 class Listener:
     def __init__(self, sock):
         self.sock = sock
@@ -69,7 +69,7 @@ class ServerDict(dict):
 class ServerList(list):
     def __iter__(self):
         return self[:]
-        
+
 class ServerTimeline:
     def __init__(self, timelines, name="main", snapshots=[], nde=None, ude=None,
                  ic=0,
@@ -93,30 +93,30 @@ class ServerTimeline:
             timelines.nde_dict[name] = nde
         else:
             timelines.nde_dict[name] = ServerDict()
-            
+
         if ude:
             timelines.ude_dict[name] = ude
         else:
             timelines.ude_dict[name] = ServerDict()
-            
+
         if next:
             timelines.next_dict[name] = next
         else:
             timelines.next_dict[name] = ServerDict()
-        
+
         if cont:
             timelines.continue_dict[name] = cont
         else:
             timelines.continue_dict[name] = ServerDict()
-            
-            
+
+
         if resources:
             self.resources = resources
         else:
             self.resources = ServerDict()
         #debug("new resource set:", self.resources, type(self.resources))
         timelines.resources_dict[name] = self.resources
-        
+
         if managers:
             self.managers = managers
         else:
@@ -129,7 +129,7 @@ class ServerTimeline:
             self.snapshots.append(snapshotid)
         except:
             raise Exception("Snapshot doesn't exist " + str(snaphotid))
-        
+
     def add(self, snapshot):
         """Adds a new snapshot to the timeline"""
         if hasattr(snapshot, 'id'):
@@ -139,7 +139,7 @@ class ServerTimeline:
                 self._add_by_id(snapshot)
             else:
                 raise Exception("Couldn't add snapshot")
-    
+
     #def show(self):
     #    debug("Showing Timeline:", self.name)
     #    debug("Snapshots: ")
@@ -148,7 +148,7 @@ class ServerTimeline:
     #    debug('----')
     #    debug("maxic:", self.max_ic)
     #    debug("nextd: ", self.timelines.next_dict[self.name])
-        
+
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
         ic the instruction count. ic is used to set the nde dictionary correctly"""
@@ -173,7 +173,7 @@ class ServerTimeline:
                 resources[(typ,location)] = resource
                 managers[(typ,location)] = oldmanagers[(typ,location)]
             #debug("resource:", resource)
-       
+
         snapshots = []
         for sid in self.snapshots:
             sdata = self.timelines.snapshotdict[sid]
@@ -187,61 +187,61 @@ class ServerTimeline:
             self.timelines.snapshotdict[k].references += 1
         self.timelines.add(copy)
         return "timeline." + name
-    
+
     def get_nde(self):
         return "nde." + self.name
-    
+
     def get_ude(self):
         return "ude." + self.name
-    
+
     def get_rnext(self):
         return "rnext." + self.name
-    
+
     def get_rcontinue(self):
         return "rcontinue." + self.name
-    
+
     def get_next(self):
         return "next." + self.name
-    
+
     def get_continue(self):
         return "continue." + self.name
-    
+
     def get_name(self):
         return self.name
-    
+
     def deactivate(self, ic):
         """Deactivate timeline, saves the instruction count"""
         self.ic = ic
         if ic > self.max_ic:
             self.max_ic = ic
-        
+
     def get_ic(self):
         return self.ic
-    
+
     def get_max_ic(self):
         #debug("Server get maxic: ", self.max_ic)
         return self.max_ic
-    
+
     def set_max_ic(self, maxic):
         #debug("Server set maxic: ", maxic)
         self.max_ic = maxic
-    
+
     def get_snapshots(self):
         return self.snapshots
-    
+
     def get_resource(self, type, location):
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')), 'utf-8')
         return "resources." + self.name + "." + type + "." + enclocation
-    
+
     def get_resources(self):
         return "resources." + self.name
-    
+
     #def new_server_resource(self, type, location, timeline):
     #    resource = ServerDict()
     #    enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
     #    debug("new server resource:", timeline, type, enclocation)
     #    return resource
-    
+
     def new_resource(self, type, location):
         """Creates a new resource if it does not exist"""
         #debug("NEW RESOURCE", type, location, self.name)
@@ -255,12 +255,12 @@ class ServerTimeline:
         #debug("NEW2")
         #debug("new resource:", self.name, type, enclocation)
         return "resources." + self.name + "." + type + "." + enclocation
-    
+
     def create_manager(self, identification, manager):
         """identification is a tuple (type, location)"""
         self.managers[identification] = manager
         return self.managers[identification]
-        
+
     def get_manager(self, identification):
         return self.managers[identification]
         #return "managers." + self.name + "." + type + "." + enclocation
@@ -270,17 +270,17 @@ class ServerTimeline:
             self.managers[identification] = manager
         else:
             raise
-        
+
     def update_stdout_cache(self, text):
         self.stdout_cache += text
-    
+
     def get_stdout_cache(self):
         return self.stdout_cache
-    
+
     def set_stdout_cache(self, text):
         self.stdout_cache = text
-    
-        
+
+
 class ServerTimelines:
     def __init__(self, snapshotdict, nde_dict, ude_dict
                  #,rnext_dict, rcontinue_dict
@@ -298,26 +298,26 @@ class ServerTimelines:
         self.managers_dict = managers_dict
         self.timelines = {} # name:timeline
         self.current_timeline = None
-    
+
     def _get(self, name):
         """Returns a Server Timeline"""
         return self.timelines[name]
-    
+
     def get(self, name):
         """Returns objref to the server timeline"""
         if name in self.timelines.keys():
             return "timeline."+name
-        
+
     def get_current_timeline(self):
         """Returns the current timeline"""
         return "timeline." + self.current_timeline
-        
+
     def set_current_timeline(self, name):
         """Sets the current timeline"""
         if not name is None and not name in self.timelines:
             raise Exception("Timeline does not exist")
         self.current_timeline = name
-        
+
     def new_timeline(self, name="head", snapshotdict={}):
         """Creates a new timeline and returns a objref"""
         if name in self.timelines.keys():
@@ -326,18 +326,18 @@ class ServerTimelines:
         self.timelines[new.name] = new
         r = "timeline." + new.name
         return r
-    
+
     def add(self, timeline):
         """Adds a new timeline to the dict. Doesn't change the references on the snapshots"""
         if timeline.name in self.timelines:
             raise Exception("Timeline already exist")
         self.timelines[timeline.name] = timeline
-    
+
     def show(self):
         debug("Show values")
         for k in self.timelines.keys():
             debug(self.timelines[k].name)
-            
+
 def server(dofork=False):
     #nde = ServerDict()
     bplist = ServerDict()   # weird naming, but conforming to bdb
@@ -347,10 +347,10 @@ def server(dofork=False):
     snapshots = ServerDict()
     resources_dict = {}
     managers_dict = {}
-    
+
     nde_dict = {}
     ude_dict = {}
-    
+
     # TODO rnext_dict and rcontinue_dict is likely not needed
     # In rnext the position for the rnext command to jump to is saved
     # It is filled in user_return
@@ -358,10 +358,10 @@ def server(dofork=False):
     # In rcontinue for every executed line number a list of instruction counts
     # that have executed them is saved. This is needed for reverse continue
     rcontinue_dict = {}
-    
+
     next_dict = {}
     continue_dict = {}
-    
+
     #timelines = ServerTimelines(snapshots, nde_dict, ude_dict, rnext_dict, rcontinue_dict)
     timelines = ServerTimelines(snapshots, nde_dict, ude_dict, next_dict,
                                 continue_dict, resources_dict, managers_dict
@@ -465,10 +465,10 @@ def server(dofork=False):
                     poll.unregister(fileno)
     if dofork:
         sys.exit(0)
-        
+
 def client():
     con = connect('/tmp/shareddict')
-    
+
     txt = input()
     while txt != 'exit':
         s = txt.split()
@@ -477,7 +477,7 @@ def client():
         if command == 'set':
             con.send(pickle.dumps(('__setitem__', (idx, value), {})))
             t,r = pickle.loads(con.recv())
-                
+
         elif command == 'get':
             con.send(pickle.dumps(('__getitem__', (idx), {})))
             t,r = pickle.loads(con.recv())
@@ -489,7 +489,7 @@ def client():
             debug('Unknown return value')
         txt = input()
     con.close()
-    
+
 class DictProxy:
     def __init__(self, objref, conn=None):
         if conn:
@@ -497,7 +497,7 @@ class DictProxy:
         else:
             self.conn = connect('/tmp/shareddict')
         self.objref = objref
-    
+
     def _remote_invoke(self, method, args, kargs):
         #debug("Dict Proxy/Remote invoke", self.objref, method, args, kargs, os.getpid())
         #fn = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_back.f_code.co_filename)
@@ -515,46 +515,46 @@ class DictProxy:
             raise r
         else:
             debug('Unknown return value')
-            
+
     def __getitem__(self, idx):
         return self._remote_invoke('__getitem__', (idx,), {})
-        
+
     def __setitem__(self, idx, value):
         return self._remote_invoke('__setitem__', (idx, value), {})
-        
+
     def __iter__(self):
         return self._remote_invoke('__iter__',(), {}).__iter__()
 
     def __contains__(self, k):
         return self._remote_invoke('__contains__',(k,), {})
-        
+
     def __str__(self):
         return "DictProxy: " + self._remote_invoke('__str__',(), {})
-        
+
     def __repr__(self):
         return "DictProxy: " + self._remote_invoke('__repr__',(), {})
-        
+
     def copy(self):
         return self._remote_invoke('copy',(), {})
-        
+
     def __delitem__(self, k):
         return self._remote_invoke('__delitem__',(k,), {})
-        
+
     def update(self, d):
         return self._remote_invoke('update',(d,), {})
 
     def keys(self): # this doesn't work
         return self._remote_invoke('keys',(), {})
-        
+
     def values(self): # this doesn't work
         return self._remote_invoke('values',(), {})
-    
+
     def get(self, k, d=None): # this doesn't work
         return self._remote_invoke('get',(k, d), {})
-        
+
     def __len__(self):
         return self._remote_invoke('__len__',(), {})
-    
+
     def clear(self):
         return self._remote_invoke('clear',(), {})
 
@@ -565,7 +565,7 @@ class ListProxy:
         else:
             self.conn = connect('/tmp/shareddict')
         self.objref = objref
-    
+
     def _remote_invoke(self, method, args, kargs):
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
         t,r = pickle.loads(self.conn.recv())
@@ -575,22 +575,22 @@ class ListProxy:
             raise r
         else:
             debug('Unknown return value')
-            
+
     def __getitem__(self, idx):
         return self._remote_invoke('__getitem__', (idx,), {})
-        
+
     def __setitem__(self, idx, value):
         return self._remote_invoke('__setitem__', (idx, value), {})
-        
-    def __iter__(self): 
+
+    def __iter__(self):
         return self._remote_invoke('__iter__',(), {}).__iter__()
 
     def __contains__(self, k):
         return self._remote_invoke('__contains__',(k,), {})
-        
+
     def __str__(self):
         return "ListProxy: " + self._remote_invoke('__str__',(), {})
-        
+
     def __repr__(self):
         return "ListProxy: " + self._remote_invoke('__repr__',(), {})
 
@@ -606,25 +606,25 @@ class ListProxy:
 
     def count(self, value):
         return self._remote_invoke('count',(value,), {})
- 
+
     def extend(self, iterable):
         return self._remote_invoke('extend',(iterable,), {})
- 
+
     def index(self, value, *args):
         return self._remote_invoke('index',(iterable,)+args, {})
- 
+
     def insert(self, index, object):
         return self._remote_invoke('insert',(index, object), {})
- 
+
     def pop(self, *args):
         return self._remote_invoke('pop',args, {})
- 
+
     def remove(self, value):
         return self._remote_invoke('remove',(value,), {})
- 
+
     def reverse(self):
         return self._remote_invoke('reverse',(), {})
-    
+
     def sort(self, key=None, reverse=False):
         return self._remote_invoke('sort',(key, reverse), {})
 
@@ -635,7 +635,7 @@ class TimelineProxy:
         else:
             self.conn = connect('/tmp/shareddict')
         self.objref = objref
-    
+
     def _remote_invoke(self, method, args, kargs):
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
         t,r = pickle.loads(self.conn.recv())
@@ -645,13 +645,13 @@ class TimelineProxy:
             raise r
         else:
             debug('Unknown return value')
-            
+
     def add(self, snapshot):
         return self._remote_invoke('add',(snapshot,), {})
-        
+
     def show(self):
         return self._remote_invoke('show',(), {})
-        
+
     def copy(self, name, ic):
         objref = self._remote_invoke('copy',(name, ic), {})
         proxy = TimelineProxy(objref=objref, conn=self.conn)
@@ -659,52 +659,52 @@ class TimelineProxy:
 
     def get_name(self):
         return self._remote_invoke('get_name',(), {})
-        
+
     def get_nde(self):
         objref = self._remote_invoke('get_nde',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_ude(self):
         objref = self._remote_invoke('get_ude',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_rnext(self):
         objref = self._remote_invoke('get_rnext',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_rcontinue(self):
         objref = self._remote_invoke('get_rcontinue',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_next(self):
         objref = self._remote_invoke('get_next',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_continue(self):
         objref = self._remote_invoke('get_continue',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def deactivate(self, ic):
         return self._remote_invoke('deactivate',(ic,), {})
-        
+
     def get_ic(self):
         return self._remote_invoke('get_ic',(), {})
-        
+
     def get_max_ic(self):
         return self._remote_invoke('get_max_ic',(), {})
-        
+
     def set_max_ic(self, maxic):
         return self._remote_invoke('set_max_ic',(maxic,), {})
-        
+
     def get_snapshots(self):
         return self._remote_invoke('get_snapshots',(), {})
-        
+
     def get_resource(self, type, location):
         #debug('get_resource')
         objref = self._remote_invoke('get_resource',(type,location), {})
@@ -715,17 +715,17 @@ class TimelineProxy:
         objref = self._remote_invoke('get_resources',(), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def new_resource(self, type, location):
         #debug('new resource')
         objref = self._remote_invoke('new_resource',(type, location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def create_manager(self, identification, manager):
         """identification is a tuple (type, location)"""
         return self._remote_invoke('create_manager',(identification, manager), {})
-        
+
     def get_manager(self, identification):
         return self._remote_invoke('get_manager',(identification,), {})
 
@@ -741,7 +741,7 @@ class TimelineProxy:
     def set_stdout_cache(self, text):
         return self._remote_invoke('set_stdout_cache',(text,), {})
 
-        
+
 class TimelinesProxy:
     def __init__(self, objref="timelines", conn=None):
         if conn:
@@ -749,7 +749,7 @@ class TimelinesProxy:
         else:
             self.conn = connect('/tmp/shareddict')
         self.objref = objref
-    
+
     def _remote_invoke(self, method, args, kargs):
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
         t,r = pickle.loads(self.conn.recv())
@@ -759,25 +759,25 @@ class TimelinesProxy:
             raise r
         else:
             debug('Unknown return value')
-    
+
     def get(self, name):
         objref = self._remote_invoke('get',(name,), {})
         proxy = TimelineProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def new_timeline(self, name="head", snapshotdict={}):
         objref = self._remote_invoke('new_timeline',(name,snapshotdict), {})
         proxy = TimelineProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def get_current_timeline(self):
         objref = self._remote_invoke('get_current_timeline',(), {})
         proxy = TimelineProxy(objref=objref, conn=self.conn)
         return proxy
-    
+
     def set_current_timeline(self, name):
         return self._remote_invoke('set_current_timeline',(name,), {})
-    
+
     def show(self):
         return self._remote_invoke('show',(), {})
 
@@ -785,7 +785,7 @@ def shutdown():
     #debug("Shutting down")
     conn = connect('/tmp/shareddict')
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
-    
+
 
 if __name__ == '__main__':
     server(dofork=True)

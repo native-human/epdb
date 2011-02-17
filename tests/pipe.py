@@ -20,13 +20,13 @@ if pid:
     #while True:
     #    item = p1parent.recv()
     #    item = cmd, arg
-    #    
+    #
     #    if cmd == 'newpipe':
     #        pipe2 = arg
     #        p2parent, p2child = pipe2
     #        p2child.close()
     #        p2parent.send('hello')
-    
+
 else:
     p1parent.close()
     pipe2 = multiprocessing.Pipe()
@@ -35,4 +35,3 @@ else:
     p1child.send('blup')
     #p2parent.close()
     #print(p2child.recv())
-    

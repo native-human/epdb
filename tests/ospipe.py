@@ -8,7 +8,7 @@ r,w = os.pipe()
 class MainProcess:
     def __init__(self):
         self.start_main_process()
-    
+
     def start_main_process(self):
         read_end, write_end = os.pipe()
         pid = os.fork()
@@ -35,15 +35,15 @@ class MainProcess:
             controller_pipe = os.fdopen(write_end, 'w')
             controller_pipe.write("hello\n")
             controller_pipe.flush()
-            
+
             sp_r, sp_w = os.pipe()
             print(sp_r,sp_w)
             controller_pipe.write('pipe {0}\n'.format(sp_w))
             controller_pipe.flush()
-            
+
             sp1 = os.fdopen(sp_r, 'r')
             print sp1.readline()
-            
+
             controller_pipe.write("end\n")
             controller_pipe.flush()
 

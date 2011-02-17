@@ -29,7 +29,7 @@ class Breakpoint:
     #bpbynumber = [None] # Each entry is None or an instance of Bpt
                 # index 0 is unused, except for marking an
                 # effective break .... see effective()
-    
+
     bplist = DictProxy('bplist')
     bpbynumber = ListProxy('bpbynumber')
 
@@ -99,4 +99,3 @@ class Breakpoint:
             else: ss = ''
             print(('\tbreakpoint already hit %d time%s' %
                           (self.hits, ss)), file=out)
-

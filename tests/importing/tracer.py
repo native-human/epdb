@@ -13,7 +13,7 @@ __pythonimport__ = builtins.__import__
 
 def randint(a,b):
     print('Generate number for ', a, ',', b)
-    
+
 def myprint(*args, **kargs):
     print('Hallo Welt')
 
@@ -25,7 +25,7 @@ def __import__(*args):
         print('Found')
     except:
         pass
-    
+
     if args[0] == 'random':
         #print(mod.__dict__)
         #print(getattr(mod, 'randint'))
@@ -55,7 +55,7 @@ def tracefunc(frame, event, arg):
             return tracefunc
         if os.path.basename(frame.f_code.co_filename).startswith('__'):
             return tracefunc
-        
+
         # i += 1
         dbg.ic += 1
         #print('{filename}:{lineno} {event} {i}'.format(
@@ -70,7 +70,7 @@ def tracefunc(frame, event, arg):
         return tracefunc
     else:
         print('unexpected event {0}'.format(event))
-        
+
     return tracefunc
 
 class Tracer:
