@@ -6,5 +6,6 @@ lib/*
 bin/*
 countinst/package/.svn/*
 debian/usr/share/epdb/dbgmods
+sandbox/*
 epdb.deb
 epdb.komodoproject

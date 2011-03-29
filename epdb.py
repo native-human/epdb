@@ -23,6 +23,7 @@ from debug import debug
 #from debug import sendcmd
 import string
 import imp
+import epdblib.importer
 
 dbgpath = None
 
@@ -43,8 +44,8 @@ def readconfig():
         pass
     dbgpath = dbgmods
     #debug("dbgmods", dbgmods)
-    if not dbgmods in sys.path:
-        sys.path.append(dbgmods)
+    #if not dbgmods in sys.path:
+    #    sys.path.append(dbgmods)
 
 origpath = sys.path[:]
 readconfig()
@@ -59,76 +60,142 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
            "post_mortem", "help"]
 
 mode = 'normal'
+#
+#
+#class EpdbImportFinder:
+#    def __init__(self, path=None):
+#        if path is not None and not os.path.isdir(path):
+#            raise ImportError
+#        self.path = path
+#
+#    def find_module(self, fullname, path=None):
+#        print("find_module")
+#        subname = fullname.split(".")[-1]
+#        if subname != fullname and self.path is None:
+#            return None
+#        if self.path is None:
+#            path = None
+#        else:
+#            path = [self.path]
+#        try:
+#            file, filename, stuff = imp.find_module(subname, path)
+#        except ImportError:
+#            return None
+#        return EpdbImportLoader(file, filename, stuff)
+#
+#class EpdbImportLoader:    
+#    def __init__(self, file, filename, stuff):
+#        self.file = file
+#        self.filename = filename
+#        self.stuff = stuff
+#
+#    def load_module(self, fullname):
+#        mod = imp.load_module(fullname, self.file, self.filename, self.stuff)
+#        if self.file:
+#            self.file.close()
+#        mod.__loader__ = self  # for introspection
+#        try:
+#            patch_file, patch_pathname, patch_desc = imp.find_module("__"+fullname)
+#            patch_suffix, patch_mode, patch_modtype = patch_desc
+#        except ImportError:
+#            pass
+#        else:
+#            exec(patch_file.read(), mod.__dict__)
+#        return mod
 
-def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
-    mod = __pythonimport__(name, globals, locals, fromlist, level)
-    try:
-        module = __pythonimport__('__builtins', globals, locals, fromlist)
-    except ImportError:
-        pass
-        #debug("Failed importing __builtins", sys.path)
-    else:
-        #debug('Importing __builtins with patching', name, module.__dict__.keys())
-        for key in module.__dict__.keys():
-            if key == name:
-                continue
-            if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-                continue
 
-            # if the name doesn't exist in the original file -> ignore it
-            try:
-                setattr(mod, '__orig__'+key, getattr(mod, key))
-                setattr(mod, key, getattr(module, key))
-            except AttributeError:
-                pass
-    return mod
+#def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
+#    mod = __pythonimport__(name, globals, locals, fromlist, level)
+#    try:
+#        module = __pythonimport__('__builtins', globals, locals, fromlist)
+#    except ImportError:
+#        pass
+#        #debug("Failed importing __builtins", sys.path)
+#    else:
+#        debug('Importing __builtins with patching', name, module.__dict__.keys())
+#        for key in module.__dict__.keys():
+#            if key == name:
+#                continue
+#            if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
+#                continue
+#
+#            # if the name doesn't exist in the original file -> ignore it
+#            try:
+#                setattr(mod, '__orig__'+key, getattr(mod, key))
+#                setattr(mod, key, getattr(module, key))
+#            except AttributeError:
+#                pass
+#    return mod
 
+#sys.meta_path.append(Importer())
 
-def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in ['epdb.py', 'snaphotting.py', 'dbg.py', 'shareddict.py', 'debug.py', 'bdb.py', "cmd.py", "fnmatch.py"]:
-        return __pythonimport__(name, globals, locals, fromlist, level)
-    else:
-        pass
-    new = True
-    if name in dbg.modules:
-        new = False
-    else:
-        # Check for patch module. If exist add module to dbg.skip_modules
-        # TODO what happens with submodules/package with a dot in it?
-        suffixes = [e[0] for e in imp.get_suffixes()]
-        found = False
-        for path in sys.path:
-            for suffix in suffixes:
-                if os.path.exists(os.path.join(path, "__" + name + suffix)):
-                    found = True
-                    break
-            else:
-                continue
-            break
-        if found:
-            dbg.skip_modules.add(name)
-    mod = __pythonimport__(name, globals, locals, fromlist, level)
-    if new:
-        dbg.modules.append(name)
-        if name[:2] != '__':
-            try:
-                module = __pythonimport__('__'+name, globals, locals, fromlist)
-            except ImportError:
-                pass
-            else:
-                for key in module.__dict__.keys():
-                    #if key == name:
-                    #    continue
-                    if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-                        continue
-
-                    # if the name doesn't exist in the original file -> ignore it
-                    try:
-                        setattr(mod, '__orig__'+key, getattr(mod, key))
-                        setattr(mod, key, getattr(module, key))
-                    except AttributeError:
-                        pass
-    return mod
+#def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
+#    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in sys.modules:
+#        return
+#    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in dbg.epdb_modules:
+#        return __pythonimport__(name, globals, locals, fromlist, level)
+#    else:
+#        print("__import__", name)
+#    new = True
+#    if name in dbg.modules:
+#        new = False
+#    else:
+#        # Check for patch module. If exist add module to dbg.skip_modules
+#        
+#        suffixes = [e[0] for e in imp.get_suffixes()]
+#        elements = name.split('.')
+#        prefixed = ["__" + e for e in elements]
+#        dirpath = os.path.join(*prefixed)
+#        print("dirpath", dirpath, fromlist, level)
+#        found = False
+#        if fromlist != ('http', 'json'):
+#            # TODO make it work for all from imports
+#            for path in sys.path:
+#                for suffix in suffixes:
+#                    if os.path.exists(os.path.join(path, dirpath + suffix)):
+#                        found = True
+#                        print("Found")
+#                        break
+#                else:
+#                    continue
+#                break
+#            if found:
+#                for i in range(len(elements)):
+#                    skipm = ".".join(elements[:i+1])
+#                    print("skipm: ", skipm)
+#                    dbg.skip_modules.add(skipm)
+#        else:
+#            dbg.skip_modules.add('couchdb.json')
+#            dbg.skip_modules.add('couchdb.http')
+#            dbg.skip_modules.add('couchdb')
+#        
+#    mod = __pythonimport__(name, globals, locals, fromlist, level)
+#    if new:
+#        if fromlist != ('http', 'json'):
+#            # TODO make it work for all from imports
+#            dbg.modules.append(name)
+#            if name[:2] != '__':
+#                try:
+#                    module = __pythonimport__('__'+name, globals, locals, fromlist)
+#                except ImportError:
+#                    pass
+#                else:
+#                    for key in module.__dict__.keys():
+#                        #if key == name:
+#                        #    continue
+#                        if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
+#                            continue
+#    
+#                        # if the name doesn't exist in the original file -> ignore it
+#                        try:
+#                            setattr(mod, '__orig__'+key, getattr(mod, key))
+#                            setattr(mod, key, getattr(module, key))
+#                        except AttributeError:
+#                            pass
+#        else:
+#            # merge couchdb.http and couchdb.json
+#            print("TODO merge modules http and json")
+#    return mod
 
 
 def getmodulename(path):
@@ -141,6 +208,20 @@ def getmodulename(path):
         if filename[neglen:] == suffix:
             return filename[:neglen]
             #return ModuleInfo(filename[:neglen], suffix, mode, mtype)
+
+def path_is_module(filename, module):
+    suffixes = [(-len(suffix), suffix, mode, mtype)
+                for suffix, mode, mtype in imp.get_suffixes()]
+    suffixes.sort() # try longest suffixes first, in case they overlap
+    modulepath = os.path.join(*module.split('.'))
+    sepmodulepath = os.path.join('/', modulepath)
+    initmodulepath = os.path.join(sepmodulepath, "__init__")
+    for neglen, suffix, mode, mtype in suffixes:
+        if filename == modulepath + suffix or \
+           filename.endswith(sepmodulepath + suffix) or \
+           filename.endswith(initmodulepath + suffix):
+            return True
+    return False
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -678,16 +759,7 @@ class StdDbgCom(asyncmd.Asyncmd):
 
 class Epdb(pdb.Pdb):
     def __init__(self, uds_file=None):
-        pdb.Pdb.__init__(self, skip=['random', 'time', 'debug', 'fnmatch', 'epdb',
-                'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
-                'codecs', 'types', 'io', 'builtins', 'ctypes', 'linecache',
-                'uuid', 'shelve', 'collections', 'tempfile', '_thread',
-                'subprocess', 're', 'sre_parse', 'struct', 'ctypes',
-                'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
-                'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
-                'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath',
-                'encodings.ascii', 'configparser', 'itertools', 'copy', 'linecache'])
+        pdb.Pdb.__init__(self, skip=dbg.skipped_modules)
         #asyncmd.Asyncmd.__init__(self)
         if uds_file:
             dbg.dbgcom = self.dbgcom = UdsDbgCom(self, uds_file)
@@ -702,6 +774,9 @@ class Epdb(pdb.Pdb):
         if base == True:
             return True
         #debug("not skipped", module_name)
+        # TODO: make a better check here
+        #if module_name == 'couchdb':
+        #    return True
         if module_name == '__main__':
             return False
         return module_name.startswith('__')
@@ -830,14 +905,18 @@ class Epdb(pdb.Pdb):
         #
         # So we clear up the __main__ and set several special variables
         # (this gets rid of pdb's globals and cleans old variables on restarts).
+        sys.path.append(dbgpath)
+        sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self))
+        imp.reload(sys.modules['random'])
+        imp.reload(sys.modules['time'])
         import __main__
         __main__.__dict__.clear()
-        bltins = __bltins_import__("builtins").__dict__
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
-                                  "__builtins__": bltins,
+                                  #"__builtins__": __builtins__,
+                                  "sys": __import__("sys"),
                                 })
-
+        
         # When bdb sets tracing, a number of call and line events happens
         # BEFORE debugger even reaches user's code (and the exact sequence of
         # events depends on python version). So we take special measures to
@@ -846,17 +925,11 @@ class Epdb(pdb.Pdb):
         self._wait_for_mainpyfile = 1
         self.mainpyfile = self.canonic(filename)
         self._user_requested_quit = 0
-        globals = __main__.__dict__
-        #locals = globals
-        #debug("##################",dbgpath)
-        sys.path.append('/home/patrick/myprogs/epdb/dbgmods')
-
         with open(filename, "rb") as fp:
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
-        builtins.__import__ = __import__
-
-        self.run(statement)
+            
+        self.run(statement, __main__.__dict__)
 
         dbg.ic += 1
         if self._user_requested_quit:
@@ -867,11 +940,11 @@ class Epdb(pdb.Pdb):
         dbg.mode = "post_mortem"
         self.set_resources()
         self.is_postmortem = True
-        #self.cmdloop()
         self.interaction(self.lastframe, None)
 
     def init_reversible(self):
         #self.command_running_start_time = time.time()
+        self.lastline = ''
         self.command_running_start_time = None
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
@@ -979,15 +1052,31 @@ class Epdb(pdb.Pdb):
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
         self.interaction(frame, exc_traceback)
 
+    def add_skip_module(self, module):
+        print("Skip new module: ", module)
+        self.skip.add(module)
+
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
+        #debug("user_line:", sys.meta_path, sys.path_hooks)
+        #debug("user_line", frame.f_code.co_filename, frame.f_lineno)
+        if frame.f_code.co_filename == "<string>":
+            #print("skip string")
+            return
         if dbg.skip_modules:
+            do_return = False
             for m in dbg.skip_modules:
                 self.skip.add(m)
-            if getmodulename(frame.f_code.co_filename) in dbg.skip_modules:
-                dbg.skip_modules.clear()
-                return
+                print("Added", m)
+                if path_is_module(frame.f_code.co_filename, m):
+                    print("path is module", frame.f_code.co_filename, m)
+                    do_return = True
+                    
+            print(frame.f_code.co_filename, dbg.skip_modules)
+            #if getmodulename(frame.f_code.co_filename) in dbg.skip_modules:
             dbg.skip_modules.clear()
+            if do_return:
+                return    
 
         if hasattr(self, 'lastframe'):
             del self.lastframe
@@ -997,7 +1086,7 @@ class Epdb(pdb.Pdb):
         actualtime = time.time()
         if self.starttime:
             self.runningtime += actualtime - self.starttime
-        #debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
+        debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
         dbg.ic += 1
         try:
             lineno = frame.f_lineno
@@ -1015,11 +1104,13 @@ class Epdb(pdb.Pdb):
             if r == 'snapshotmade':
                 #debug("snapshotmade")
                 self.interaction(frame, None)
+                self.starttime = time.time()
                 return
             else:
                 pass
                 #debug("main snapshot activated")
 
+        debug("Running time", self.runningtime)
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
             #debug('interaction snapshot made or activated', r)
@@ -2147,4 +2238,5 @@ def main():
 # When invoked as main program, invoke the debugger on a script
 if __name__ == '__main__':
     import epdb
+    #print(epdb, epdb.__dict__)
     epdb.main()

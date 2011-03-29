@@ -4,8 +4,34 @@ import os.path
 import sys
 import _thread
 
+epdb_modules = ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py", "configparser.py", "posixpath.py"]
+skipped_modules = ['time', 'debug', 'fnmatch', 'epdb',
+                'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
+                'codecs', 'types', 'io', 'builtins', 'ctypes', 'linecache',
+                'uuid', 'shelve', 'collections', 'tempfile', '_thread',
+                'subprocess', 're', 'sre_parse', 'struct', 'ctypes',
+                'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
+                'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
+                'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
+                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath',
+                'encodings.ascii', 'configparser', 'itertools', 'copy', 'linecache',
+                'mimetypes', 'urllib.parse', 'urllib', 'inspect', 'dis', 'opcode',
+                'textwrap', 'http', 'http.client', 'email', 'email.parser',
+                'email.feedparser', 'email.errors', 'email.message', 'uu',
+                'email.utils', 'email._parseaddr', 'quopri', 'email.encoders',
+                'email.charset', 'email.base64mime', 'email.quoprimime',
+                'email.iterators', 'ssl', 'urllib.request', 'hashlib',
+                'urllib.error', 'urllib.response', '_abcoll', 'pkg_resources',
+                'distutils', 'distutils.util', 'distutils.errors',
+                'distutils.dep_util', 'distutils.spawn', 'distutils.log',
+                'distutils.core', 'pkgutil', 'stat', 'encodings', 'socket',
+                'encodings.idna', 'stringprep', 'json', 'json.decoder',
+                'json.scanner', 'json.encoder', 'epdblib.importer', 'couchdb',
+                'couchdb.client', 'inspect', 'encodings.latin_1', 'couchdb.http',
+                'couchdb.json']
+
 def is_dbg_callee():
-    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py", "configparser.py", "posixpath.py"]:
+    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in epdb_modules:
         return True
     return False
 

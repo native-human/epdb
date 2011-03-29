@@ -1,8 +1,10 @@
 INSTALLDIR=debian/usr/lib/python3.1/dist-packages/
 BINDIR=debian/usr/bin
 DBGMODSDIR=debian/usr/share/epdb/dbgmods
+EPDBLIBDIR=debian/usr/lib/python3.1/dist-packages/
 mkdir -p ${INSTALLDIR}
 cp epdb.py debug.py shareddict.py snapshotting.py dbg.py breakpoint.py resources.py asyncmd.py ${INSTALLDIR}
+cp -r epdblib ${EPDBLIBDIR}
 python3 -mcompileall ${INSTALLDIR}
 mkdir -p ${DBGMODSDIR}
 cp dbgmods/* ${DBGMODSDIR}
