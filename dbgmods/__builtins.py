@@ -2,7 +2,7 @@
 
 # TODO make this file look more like in the thesis
 
-import builtins
+#import builtins
 import types
 import dbg
 from io import SEEK_SET, SEEK_END, SEEK_CUR
@@ -18,36 +18,35 @@ import base64
 import traceback
 import resources
 
-def orig_open(*args, **kargs):
-    return builtins.__orig__open(*args, **kargs)
-
+__orig__print = print
 def print(*args, sep=' ', end='\n', file=sys.stdout):
     #builtins.__orig__print(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename)
     if dbg.is_dbg_callee():
-        return builtins.__orig__print(*args, sep=sep, end=end, file=file)
+        return __orig__print(*args, sep=sep, end=end, file=file)
     if dbg.mode == 'replay' or dbg.mode == 'redo':
         return None
     elif dbg.mode == 'normal':
         s = io.StringIO()
-        builtins.__orig__print(*args, sep=sep, end=end, file=s)
+        __orig__print(*args, sep=sep, end=end, file=s)
         stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
         stdout_resource_manager.update_stdout(s.getvalue())
         id = stdout_resource_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic+1] = id
-        return builtins.__orig__print(*args, sep=sep, end=end, file=file)
+        return __orig__print(*args, sep=sep, end=end, file=file)
 
+__orig__input = input
 def input(prompt=""):
     #caller = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
     #if caller in ['cmd.py']:
     if dbg.is_dbg_callee():
-        return builtins.__orig__input(prompt)
+        return __orig__input(prompt)
     if dbg.mode == 'redo' or dbg.mode == 'replay':
         return None
     elif dbg.mode == 'normal':
         dbg.snapshottingcontrol.set_make_snapshot()
         dbg.dbgcom.send_expect_input()
         #log.debug("expect input#")
-        orig = builtins.__orig__input(prompt)
+        orig = __orig__input(prompt)
         stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
         stdout_resource_manager.update_stdout(prompt + orig + '\r\n')
         id = stdout_resource_manager.save()
@@ -92,11 +91,13 @@ class FileProxy:
         elif dbg.mode == 'replay' or dbg.mode == 'redo':
             self.__file__.close()
 
+
+__orig__open = open
 def open(file, mode = "r", buffering = -1, encoding = None, errors = None, newline = None, closefd = True):
     if dbg.is_dbg_callee():
-        return builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
+        return __orig__open(file, mode, buffering, encoding, errors, newline, closefd)
 
-    fd = builtins.__orig__open(file, mode, buffering, encoding, errors, newline, closefd)
+    fd = __orig__open(file, mode, buffering, encoding, errors, newline, closefd)
     args = (file, mode, buffering, encoding, errors, newline, closefd)
     fp = FileProxy(fd, args)
     return fp

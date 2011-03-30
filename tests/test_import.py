@@ -47,6 +47,13 @@ class NormalImportTestCase(unittest.TestCase):
         self.assertEqual(42, spam.eggs.ham.hello_world())
         self.assertIn('spam.eggs.ham', self.dbg.skip)
         
+    def test_builtins(self):
+        print('\n')
+        if 'builtins' in sys.modules.keys():
+            del sys.modules['builtins']
+        import builtins
+        self.assertEqual(builtins.dir(), "patched dir")
+        
     def tearDown(self):
         del sys.meta_path[:]
 

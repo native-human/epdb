@@ -1,7 +1,7 @@
 
 import dbg
-import snap
 
+__orig__foo = foo
 def foo():
     dbg.snapshottingcontrol.set_make_snapshot()
-    return snap.__orig__foo()
+    return __orig__foo()

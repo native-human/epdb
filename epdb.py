@@ -905,16 +905,19 @@ class Epdb(pdb.Pdb):
         #
         # So we clear up the __main__ and set several special variables
         # (this gets rid of pdb's globals and cleans old variables on restarts).
-        sys.path.append(dbgpath)
-        sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self))
+        #sys.path.append(dbgpath)
+        sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self, dbgmods=['./', dbgpath]))
+        if 'builtins' in sys.modules.keys():
+            del sys.modules['builtins']
+        import builtins
+        bltins = builtins
         imp.reload(sys.modules['random'])
         imp.reload(sys.modules['time'])
         import __main__
         __main__.__dict__.clear()
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
-                                  #"__builtins__": __builtins__,
-                                  "sys": __import__("sys"),
+                                  "__builtins__": bltins,
                                 })
         
         # When bdb sets tracing, a number of call and line events happens
@@ -1053,7 +1056,7 @@ class Epdb(pdb.Pdb):
         self.interaction(frame, exc_traceback)
 
     def add_skip_module(self, module):
-        print("Skip new module: ", module)
+        #print("Skip new module: ", module)
         self.skip.add(module)
 
     def user_line(self, frame):
@@ -1086,7 +1089,7 @@ class Epdb(pdb.Pdb):
         actualtime = time.time()
         if self.starttime:
             self.runningtime += actualtime - self.starttime
-        debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
+        #debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
         dbg.ic += 1
         try:
             lineno = frame.f_lineno
@@ -1110,7 +1113,7 @@ class Epdb(pdb.Pdb):
                 pass
                 #debug("main snapshot activated")
 
-        debug("Running time", self.runningtime)
+        #debug("Running time", self.runningtime)
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
             #debug('interaction snapshot made or activated', r)

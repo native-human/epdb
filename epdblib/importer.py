@@ -14,12 +14,13 @@ class EpdbImportFinder:
     def find_module(self, fullname, path=None):
         #if fullname in ['inspect', 'pkg_resources', 'mimetypes', 'textwrap']:
         #    return None
+        #print("[find_module]", fullname)
         patchfilename = None
         
         subname = fullname.split(".")[-1]
         #print("[findmodule]", "subname:", subname, "fullname:", fullname, "path:", path)
         
-        loaded_spam_modules = [mod for mod in sys.modules.keys() if mod.startswith("spam")]
+        #loaded_spam_modules = [mod for mod in sys.modules.keys() if mod.startswith("spam")]
         #print("loaded_modules:", loaded_spam_modules)
         
         splitted_name = ["__" + e for e in fullname.split(".")]
@@ -32,7 +33,7 @@ class EpdbImportFinder:
                 #print("pkg_dir found:", patchpath)
                 break
             elif os.path.exists(patchpath+'.py'):
-                #print("patchpyfilefound")
+                #print("patchpyfilefound", patchpath+'.py')
                 patchfilename = patchpath+'.py'
                 break
             elif os.path.exists(patchpath+".pyc"):
@@ -40,8 +41,8 @@ class EpdbImportFinder:
                 break
             else:
                 pass
-                #print("Unknown Problem: ", patchpath)
         else:
+            #print("No patch file found")
             return # use standard import mechanism if no patch module exists
         if self.debugger:
             self.debugger.add_skip_module(fullname)
