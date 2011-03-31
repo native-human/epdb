@@ -1,3 +1,4 @@
+from coverage import coverage
 import epdblib.importer
 import unittest
 import sys
@@ -23,6 +24,8 @@ class NormalImportTestCase(unittest.TestCase):
         self.dbg = DebuggerStub()
         sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self.dbg, dbgmods=['./dbgmods']))
         sys.meta_path.append(PrintImportHook())
+        self.cov = coverage(source=["epdblib"], cover_pylib=True)
+        self.cov.start()
 
     def test_patch_random(self):
         print('\n')
@@ -55,6 +58,8 @@ class NormalImportTestCase(unittest.TestCase):
         self.assertEqual(builtins.dir(), "patched dir")
         
     def tearDown(self):
+        self.cov.stop()
+        self.cov.save()
         del sys.meta_path[:]
 
 if __name__ == '__main__':

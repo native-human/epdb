@@ -9,3 +9,5 @@ debian/usr/share/epdb/dbgmods
 sandbox/*
 epdb.deb
 epdb.komodoproject
+*.coverage
+tests/htmlcov
