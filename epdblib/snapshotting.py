@@ -6,10 +6,10 @@ import sys
 import select
 import logging
 import tempfile
-import debug as log
+from epdblib import debug as log
 
-import dbg
-import shareddict
+from epdblib import dbg
+from epdblib import shareddict
 
 tmpfd, tmppath = tempfile.mkstemp(".dbg")
 

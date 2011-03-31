@@ -3,12 +3,12 @@ import sys
 import epdblib.debugger
 import pdb
 import os
-import debug
+from epdblib import debug
 import bdb
-import snapshotting
+from epdblib import snapshotting
 import traceback
 import _thread
-import dbg
+from epdblib import dbg
 
 #TESTCMD = 'import x; x.main()'
 
@@ -20,12 +20,16 @@ class UsageException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
 
+class HelpException(Exception):
+    pass
+
 def help():
     for dirname in sys.path:
         fullname = os.path.join(dirname, 'epdb.doc')
         if os.path.exists(fullname):
             sts = os.system('${PAGER-more} '+fullname)
-            if sts: print('*** Pager exit status:', sts)
+            if sts:
+                print('*** Pager exit status:', sts)
             break
     else:
         pass
@@ -51,7 +55,7 @@ def parse_args(argv):
     i = 0
     while i < len(argv):
         if argv[i] == '--help' or argv[i] == '-h':
-            raise UsageException()
+            raise HelpException()
         elif argv[i] == '--stdout':
             use_stdout = True
             use_uds = False
@@ -97,6 +101,9 @@ def main():
         epdb, mainpyfile = parse_args(sys.argv)
     except UsageException as e:
         usage(e.msg)
+    except HelpException as e:
+        help()
+        sys.exit(0)
     print("mainpyfile", mainpyfile)
     #print("udsfile", uds_file)
     if not os.path.exists(mainpyfile):

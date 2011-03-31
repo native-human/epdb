@@ -4,12 +4,12 @@ import shelve
 import base64
 import os.path
 import tempfile
-import dbg
+from epdblib import dbg
 import builtins
 from fcntl import LOCK_SH, LOCK_EX, LOCK_UN, LOCK_NB
 import fcntl
 from uuid import uuid4
-from debug import debug
+from epdblib.debug import debug
 
 
 def _close(self):

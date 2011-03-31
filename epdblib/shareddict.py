@@ -13,7 +13,7 @@ import base64
 import re
 import traceback
 import _thread
-from debug import debug
+from epdblib.debug import debug
 
 def connect(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

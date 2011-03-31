@@ -4,16 +4,17 @@ import os.path
 import sys
 import _thread
 
-epdb_modules = ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py', "asyncmd.py", "configparser.py", "posixpath.py"]
+epdb_modules = ['epdb.py', 'debug.py', 'pdb.py', 'linecache.py', 'resources.py',
+                "asyncmd.py", "configparser.py", "posixpath.py", "debugger.py"]
 skipped_modules = ['time', 'debug', 'fnmatch', 'epdb',
-                'posixpath', 'shareddict', 'pickle', 'os', 'dbg', 'locale',
+                'posixpath', 'epdblib.shareddict', 'pickle', 'os', 'epdblib.dbg', 'locale',
                 'codecs', 'types', 'io', 'builtins', 'ctypes', 'linecache',
                 'uuid', 'shelve', 'collections', 'tempfile', '_thread',
                 'subprocess', 're', 'sre_parse', 'struct', 'ctypes',
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'resources', 'bdb', 'debug', 'runpy', 'genericpath',
+                'functools', 'epdblib.resources', 'bdb', 'debug', 'runpy', 'genericpath',
                 'encodings.ascii', 'configparser', 'itertools', 'copy', 'linecache',
                 'mimetypes', 'urllib.parse', 'urllib', 'inspect', 'dis', 'opcode',
                 'textwrap', 'http', 'http.client', 'email', 'email.parser',

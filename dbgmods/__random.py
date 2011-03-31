@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-import dbg
-import debug as log
+from epdblib import dbg
+from epdblib import debug as log
 
 __orig__seed = seed
 def seed(a=None):

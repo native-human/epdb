@@ -1,28 +1,25 @@
 import pdb
 import sys
 import linecache
-import cmd
 import bdb
 from reprlib import Repr
 import os
 import os.path
-import traceback
-import snapshotting
+import epdblib.snapshotting
 import builtins
 import _thread
 import configparser
-import shareddict
+import epdblib.shareddict
 import tempfile
-import resources
+import epdblib.resources
 import time
-import asyncmd
-import io
-import socket
-from debug import debug
+import epdblib.communication
+from epdblib.debug import debug
 #from debug import sendcmd
-import string
 import imp
 import epdblib.importer
+
+from epdblib import dbg
 
 dbgpath = None
 
@@ -51,151 +48,13 @@ readconfig()
 
 #debug("PATH: ", sys.path)
 
-import dbg
 
 __pythonimport__ = builtins.__import__
 
 __all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
-           "post_mortem", "help"]
+           "post_mortem"]
 
 mode = 'normal'
-#
-#
-#class EpdbImportFinder:
-#    def __init__(self, path=None):
-#        if path is not None and not os.path.isdir(path):
-#            raise ImportError
-#        self.path = path
-#
-#    def find_module(self, fullname, path=None):
-#        print("find_module")
-#        subname = fullname.split(".")[-1]
-#        if subname != fullname and self.path is None:
-#            return None
-#        if self.path is None:
-#            path = None
-#        else:
-#            path = [self.path]
-#        try:
-#            file, filename, stuff = imp.find_module(subname, path)
-#        except ImportError:
-#            return None
-#        return EpdbImportLoader(file, filename, stuff)
-#
-#class EpdbImportLoader:    
-#    def __init__(self, file, filename, stuff):
-#        self.file = file
-#        self.filename = filename
-#        self.stuff = stuff
-#
-#    def load_module(self, fullname):
-#        mod = imp.load_module(fullname, self.file, self.filename, self.stuff)
-#        if self.file:
-#            self.file.close()
-#        mod.__loader__ = self  # for introspection
-#        try:
-#            patch_file, patch_pathname, patch_desc = imp.find_module("__"+fullname)
-#            patch_suffix, patch_mode, patch_modtype = patch_desc
-#        except ImportError:
-#            pass
-#        else:
-#            exec(patch_file.read(), mod.__dict__)
-#        return mod
-
-
-#def __bltins_import__(name, globals=None, locals=None, fromlist=None, level=-1):
-#    mod = __pythonimport__(name, globals, locals, fromlist, level)
-#    try:
-#        module = __pythonimport__('__builtins', globals, locals, fromlist)
-#    except ImportError:
-#        pass
-#        #debug("Failed importing __builtins", sys.path)
-#    else:
-#        debug('Importing __builtins with patching', name, module.__dict__.keys())
-#        for key in module.__dict__.keys():
-#            if key == name:
-#                continue
-#            if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-#                continue
-#
-#            # if the name doesn't exist in the original file -> ignore it
-#            try:
-#                setattr(mod, '__orig__'+key, getattr(mod, key))
-#                setattr(mod, key, getattr(module, key))
-#            except AttributeError:
-#                pass
-#    return mod
-
-#sys.meta_path.append(Importer())
-
-#def __import__(name, globals=None, locals=None, fromlist=None, level=-1):
-#    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in sys.modules:
-#        return
-#    if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename) in dbg.epdb_modules:
-#        return __pythonimport__(name, globals, locals, fromlist, level)
-#    else:
-#        print("__import__", name)
-#    new = True
-#    if name in dbg.modules:
-#        new = False
-#    else:
-#        # Check for patch module. If exist add module to dbg.skip_modules
-#        
-#        suffixes = [e[0] for e in imp.get_suffixes()]
-#        elements = name.split('.')
-#        prefixed = ["__" + e for e in elements]
-#        dirpath = os.path.join(*prefixed)
-#        print("dirpath", dirpath, fromlist, level)
-#        found = False
-#        if fromlist != ('http', 'json'):
-#            # TODO make it work for all from imports
-#            for path in sys.path:
-#                for suffix in suffixes:
-#                    if os.path.exists(os.path.join(path, dirpath + suffix)):
-#                        found = True
-#                        print("Found")
-#                        break
-#                else:
-#                    continue
-#                break
-#            if found:
-#                for i in range(len(elements)):
-#                    skipm = ".".join(elements[:i+1])
-#                    print("skipm: ", skipm)
-#                    dbg.skip_modules.add(skipm)
-#        else:
-#            dbg.skip_modules.add('couchdb.json')
-#            dbg.skip_modules.add('couchdb.http')
-#            dbg.skip_modules.add('couchdb')
-#        
-#    mod = __pythonimport__(name, globals, locals, fromlist, level)
-#    if new:
-#        if fromlist != ('http', 'json'):
-#            # TODO make it work for all from imports
-#            dbg.modules.append(name)
-#            if name[:2] != '__':
-#                try:
-#                    module = __pythonimport__('__'+name, globals, locals, fromlist)
-#                except ImportError:
-#                    pass
-#                else:
-#                    for key in module.__dict__.keys():
-#                        #if key == name:
-#                        #    continue
-#                        if key in ['__builtins__', '__file__', '__package__', '__name__', '__doc__', 'dbg']:
-#                            continue
-#    
-#                        # if the name doesn't exist in the original file -> ignore it
-#                        try:
-#                            setattr(mod, '__orig__'+key, getattr(mod, key))
-#                            setattr(mod, key, getattr(module, key))
-#                        except AttributeError:
-#                            pass
-#        else:
-#            # merge couchdb.http and couchdb.json
-#            print("TODO merge modules http and json")
-#    return mod
-
 
 def getmodulename(path):
     """Get the module name, suffix, mode, and module type for a given file."""
@@ -236,534 +95,13 @@ class SnapshotData:
         self.ic = ic
         self.references = 0
 
-class UdsDbgCom():
-    def __init__(self, debugger, filename):
-        self.debugger = debugger
-        self.prompt = '(Epdb) '
-        self.aliases = {}
-        self.filename = filename
-
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(filename)
-        self.cmdqueue = []
-        self.identchars = string.ascii_letters + string.digits + '_'
-
-    def do_p(self, arg):
-        return self.debugger.cmd_print(arg)
-    do_print = do_p
-
-    def do_set_resources(self, arg):
-        return self.debugger.cmd_set_resources(arg)
-
-    def do_snapshot(self, arg, temporary=0):
-        return self.debugger.cmd_snapshot(arg, temporary)
-
-    def do_restore(self, arg):
-        return self.debugger.cmd_restore(arg)
-
-    def do_continued(self, arg):
-        return self.debugger.cmd_continued(arg)
-
-    def do_nde(self, arg):
-        """Shows the current nde. Debugging only."""
-        return self.debugger.cmd_nde(arg)
-
-    def do_resources(self, arg):
-        return self.debugger.cmd_resources(arg)
-
-    def do_ic(self, arg):
-        """Shows the current instruction count"""
-        return self.debugger.cmd_ic(arg)
-
-    def do_timelines(self, arg):
-        """List all timelines."""
-        return self.debugger.cmd_timelines(arg)
-
-    def do_timeline_snapshots(self, arg):
-        "List all snapshots for the timeline"
-        return self.debugger.cmd_timeline_snapshots(arg)
-
-    def do_switch_timeline(self, arg):
-        """Switch to another timeline"""
-        return self.debugger.cmd_switch_timeline(arg)
-
-    def do_current_timeline(self, arg):
-        """View the name of the current timeline"""
-        return self.debugger.cmd_current_timeline(arg)
-
-    def do_newtimeline(self, arg):
-        """Create a new timeline. This allows changing the program flow from the last run"""
-        return self.debugger.cmd_newtimeline(arg)
-
-
-    def do_EOF(self, arg):
-        """Quit the program, if connection terminates"""
-        return self.debugger.cmd_quit()
-
-    def do_quit(self, arg):
-        """quits the program"""
-        return self.debugger.cmd_quit()
-
-    def do_mode(self, arg):
-        """Shows the current mode."""
-        return self.debugger.cmd_mode(arg)
-
-    def do_ron(self, arg):
-        """Enables reversible debugging"""
-        return self.debugger.cmd_ron(arg)
-
-    def do_roff(self, arg):
-        """Disables reversible debugging"""
-        return self.debugger.cmd_roff(arg)
-
-    def do_rstep(self, arg):
-        """Steps one step backwards"""
-        return self.debugger.cmd_rstep(arg)
-
-    def do_rnext(self, arg):
-        """Reverse a next command."""
-        return self.debugger.cmd_rnext(arg)
-
-    def do_rcontinue(self, arg):
-        """Continues in backward direction"""
-        return self.debugger.cmd_rcontinue(arg)
-
-    def do_step(self, arg):
-        return self.debugger.cmd_step(arg)
-    do_s = do_step
-
-    def do_next(self, arg):
-        return self.debugger.cmd_next(arg)
-    do_n = do_next
-
-    def do_continue(self, arg):
-        return self.debugger.cmd_continue(arg)
-    do_c = do_cont = do_continue
-
-    def do_return(self, arg):
-        "not implmented yet for epdb"
-    #do_r = do_return
-
-    def do_activate_snapshot(self, arg):
-        """activate a snapshot of the current timeline"""
-        return self.debugger.cmd_activate_snapshot(arg)
-
-    def do_show_break(self, arg):
-        return self.debugger.cmd_show_break(arg)
-
-    def do_break(self, arg, temporary = 0):
-        return self.debugger.cmd_break(arg, temporary)
-
-    def do_clear(self, arg):
-        """Three possibilities, tried in this order:
-        clear -> clear all breaks, ask for confirmation
-        clear file:lineno -> clear all breaks at file:lineno
-        clear bpno bpno ... -> clear breakpoints by number"""
-        return self.debugger.cmd_clear(arg)
-
-    do_cl = do_clear # 'c' is already an abbreviation for 'continue'
-
-    def do_commands(self, arg):
-        """Not supported yet"""
-        # because epdbs implementation calls the blocking cmdloop there
-
-    def preloop(self):
-        self.debugger.preprompt()
-
-    def onecmd(self, line):
-        """Interpret the argument as though it had been typed in response
-        to the prompt.
-
-        This may be overridden, but should not normally need to be;
-        see the precmd() and postcmd() methods for useful execution hooks.
-        The return value is a flag indicating whether interpretation of
-        commands by the interpreter should stop.
-
-        """
-        cmd, arg, line = self.parseline(line)
-        if not line:
-            return self.emptyline()
-        if cmd is None:
-            return self.default(line)
-        self.lastcmd = line
-        if cmd == '':
-            return self.default(line)
-        else:
-            try:
-                func = getattr(self, 'do_' + cmd)
-            except AttributeError:
-                return self.default(line)
-            return func(arg)
-
-    def parseline(self, line):
-        """Parse the line into a command name and a string containing
-        the arguments.  Returns a tuple containing (command, args, line).
-        'command' and 'args' may be None if the line couldn't be parsed.
-        """
-        line = line.strip()
-        if not line:
-            return None, None, line
-        elif line[0] == '?':
-            line = 'help ' + line[1:]
-        elif line[0] == '!':
-            if hasattr(self, 'do_shell'):
-                line = 'shell ' + line[1:]
-            else:
-                return None, None, line
-        i, n = 0, len(line)
-        while i < n and line[i] in self.identchars:
-            i = i+1
-        cmd, arg = line[:i], line[i:].strip()
-        return cmd, arg, line
-
-    def send(self, line):
-        bline = line.encode("UTF-8")
-        try:
-            if bline.endswith(b"\r\n"):
-                self.sock.send(bline)
-            elif bline.endswith(b"\n") or bline.endswith(b"\r"):
-                self.sock.send(bline[:-1]+b"\r\n")
-            else:
-                self.sock.send(bline+b"\r\n")
-        except socket.error:
-            #print("socket.error")
-            self.onecmd('quit')
-
-
-    def get_cmd(self):
-        self.preloop()
-        stop = None
-        line = b''
-        while not stop:
-            try:
-                #line = input(self.prompt)
-                while not b"\r\n" in line:
-                    got = self.sock.recv(4096)
-                    line += got
-                    if line == b'':
-                        line = b'EOF'
-                        break
-                    elif got == b'':
-                        break
-            except EOFError:
-                line = 'EOF'
-
-            firstline, _, line = line.partition(b"\r\n")
-            firstline = firstline.decode("UTF-8")
-            firstline = firstline.rstrip('\r\n')
-            #print("Received Line:", firstline)
-            #line = self.precmd(line)
-            stop = self.onecmd(firstline)
-            #stop = self.postcmd(stop, line)
-        #self.postloop()
-
-
-    def send_ic_mode(self, ic, mode):
-        self.send("ic#" + str(ic) + "\r\n")
-        self.send("mode#" + mode + "\r\n")
-
-    def send_time(self, time=None):
-        if time is None:
-            self.send("time#" + "\r\n")
-        else:
-            self.send("time#" + str(time) + "\r\n")
-
-    def send_var(self, varname, value):
-        self.send("var#" + varname + "#" + value + '\r\n')
-
-    def send_varerr(self, varname):
-        self.send("varerror#"+ varname + "\r\n")
-
-    def send_synterr(self, file, ic):
-        self.send("syntax_error#"+ file + "#" + ic + "\r\n")
-
-    def send_lastline(self, line):
-        self.send("lineinfo#" + line+"\r\n")
-
-    def send_resources(self, resources):
-        # resources [(resource_type, resource_location, [(id, ic), ...]), ...]
-        self.send("list resources#\r\n")
-        for rtype, rloc, rlist in resources:
-            self.send('resource#' + rtype + '#' + rloc + '\r\n')
-            for rid, ric in rlist:
-                self.send('resource_entry#' + rtype + '#' + rloc + '#' + str(rid) + '#' + str(ric) + '\r\n')
-
-    def send_timeline_snapshots(self, snapshot_list):
-        self.send("list_timeline_snapshots#\r\n")
-        for snapshot in snapshot_list:
-            self.send('tsnapshot#' + str(snapshot.id) + '#' + str(snapshot.ic) + "\r\n")
-
-    def send_timeline_switched(self, timeline_name):
-        self.send("switched to timeline#" + timeline_name + "\r\n")
-
-    def send_newtimeline_success(self, name):
-        self.send("newtimeline successful#"+name+"\r\n")
-
-    def send_file_pos(self, formatted_line):
-        self.send('lineinfo#' + formatted_line + '\r\n')
-
-    def send_expect_input(self):
-        self.send("expect input#\r\n")
-
-    def send_stdout(self, stdout):
-        self.send("clear_stdout#\r\n")
-        for line in stdout:
-            self.send("add_stdout_line#"+line+'\r\n')
-
-    def send_break_nosuccess(self, filename, lineno, reason):
-        self.send("break nosuccess#" + str(filename) + "#" + str(lineno) + \
-                  "#" + str(reason)+ "\r\n")
-
-    def send_break_success(self, number, filename, lineno):
-        self.send("break success#" + str(number) + "#" + str(filename) + \
-                  "#" + str(lineno)+ "\r\n")
-
-    def send_clear_success(self, number):
-        self.send("clear success#" + str(number)+ "\r\n")
-
-    def send_program_finished(self):
-        self.send("program finished#" + "\r\n")
-
-    def send_message(self, message):
-        self.send("message#" + message + "\r\n")
-
-    def send_debugmessage(self, message):
-        self.send("debugmessage#" + message + "\r\n")
-
-
-class StdDbgCom(asyncmd.Asyncmd):
-    def __init__(self, debugger):
-        asyncmd.Asyncmd.__init__(self)
-        self.debugger = debugger
-        self.prompt = '(Epdb) '
-        self.aliases = {}
-
-    def do_p(self, arg):
-        return self.debugger.cmd_print(arg)
-    do_print = do_p
-
-    def do_set_resources(self, arg):
-        return self.debugger.cmd_set_resources(arg)
-
-    def do_snapshot(self, arg, temporary=0):
-        return self.debugger.cmd_snapshot(arg, temporary)
-
-    def do_restore(self, arg):
-        return self.debugger.cmd_restore(arg)
-
-    def do_continued(self, arg):
-        return self.debugger.cmd_continued(arg)
-
-    def do_nde(self, arg):
-        """Shows the current nde. Debugging only."""
-        return self.debugger.cmd_nde(arg)
-
-    def do_resources(self, arg):
-        return self.debugger.cmd_resources(arg)
-
-    def do_ic(self, arg):
-        """Shows the current instruction count"""
-        return self.debugger.cmd_ic(arg)
-
-    def do_timelines(self, arg):
-        """List all timelines."""
-        return self.debugger.cmd_timelines(arg)
-
-    def do_timeline_snapshots(self, arg):
-        "List all snapshots for the timeline"
-        return self.debugger.cmd_timeline_snapshots(arg)
-
-    def do_switch_timeline(self, arg):
-        """Switch to another timeline"""
-        return self.debugger.cmd_switch_timeline(arg)
-
-    def do_current_timeline(self, arg):
-        """View the name of the current timeline"""
-        return self.debugger.cmd_current_timeline(arg)
-
-    def do_newtimeline(self, arg):
-        """Create a new timeline. This allows changing the program flow from the last run"""
-        return self.debugger.cmd_newtimeline(arg)
-
-    def do_quit(self, arg):
-        """quits the program"""
-        return self.debugger.cmd_quit()
-
-    def do_mode(self, arg):
-        """Shows the current mode."""
-        return self.debugger.cmd_mode(arg)
-
-    def do_ron(self, arg):
-        """Enables reversible debugging"""
-        return self.debugger.cmd_ron(arg)
-
-    def do_roff(self, arg):
-        """Disables reversible debugging"""
-        return self.debugger.cmd_roff(arg)
-
-    def do_rstep(self, arg):
-        """Steps one step backwards"""
-        return self.debugger.cmd_rstep(arg)
-
-    def do_rnext(self, arg):
-        """Reverse a next command."""
-        return self.debugger.cmd_rnext(arg)
-
-    def do_rcontinue(self, arg):
-        """Continues in backward direction"""
-        return self.debugger.cmd_rcontinue(arg)
-
-    def do_step(self, arg):
-        return self.debugger.cmd_step(arg)
-    do_s = do_step
-
-    def do_next(self, arg):
-        return self.debugger.cmd_next(arg)
-    do_n = do_next
-
-    def do_continue(self, arg):
-        return self.debugger.cmd_continue(arg)
-    do_c = do_cont = do_continue
-
-    def do_return(self, arg):
-        "not implmented yet for epdb"
-    #do_r = do_return
-
-    def do_activate_snapshot(self, arg):
-        """activate a snapshot of the current timeline"""
-        return self.debugger.cmd_activate_snapshot(arg)
-
-    def do_show_break(self, arg):
-        return self.debugger.cmd_show_break(arg)
-
-    def do_break(self, arg, temporary = 0):
-        return self.debugger.cmd_break(arg, temporary)
-
-    def do_clear(self, arg):
-        """Three possibilities, tried in this order:
-        clear -> clear all breaks, ask for confirmation
-        clear file:lineno -> clear all breaks at file:lineno
-        clear bpno bpno ... -> clear breakpoints by number"""
-        return self.debugger.cmd_clear(arg)
-
-    do_cl = do_clear # 'c' is already an abbreviation for 'continue'
-
-    def do_commands(self, arg):
-        """Not supported yet"""
-        # because epdbs implementation calls the blocking cmdloop there
-
-    def precmd(self, line):
-        """Handle alias expansion and ';;' separator."""
-        if not line:
-            return
-        if not line.strip():
-            return line
-        args = line.split()
-        while args[0] in self.aliases:
-            line = self.aliases[args[0]]
-            ii = 1
-            for tmpArg in args[1:]:
-                line = line.replace("%" + str(ii),
-                                      tmpArg)
-                ii = ii + 1
-            line = line.replace("%*", ' '.join(args[1:]))
-            args = line.split()
-        # split into ';;' separated commands
-        # unless it's an alias command
-        if args[0] != 'alias':
-            marker = line.find(';;')
-            if marker >= 0:
-                # queue up everything after marker
-                next = line[marker+2:].lstrip()
-                self.cmdqueue.append(next)
-                line = line[:marker].rstrip()
-        return line
-
-    def preloop(self):
-        self.debugger.preprompt()
-
-    def get_cmd(self):
-        self.cmdloop()
-
-    def send_ic_mode(self, ic, mode):
-        self.send_raw("ic:", ic, "mode:", mode)
-
-    def send_time(self, time=None):
-        if time is None:
-            self.send_raw("time:")
-        else:
-            self.send_raw("time: ", time)
-
-    def send_var(self, varname, value):
-        self.send_raw("var#", varname, "#", value, '#', sep='')
-
-    def send_varerr(self, varname):
-        self.send_raw("varerror#", varname)
-
-    def send_synterr(self, file, ic):
-        self.send_raw("syntax_error", file, ic, '', sep='#')
-
-    def send_lastline(self, line):
-        self.send_raw("> " + line, prefix="")
-
-    def send_resources(self, resources):
-        # resources [(resource_type, resource_location, [(id, ic), ...]), ...]
-        self.send_raw("show resources#")
-        for rtype, rloc, rlist in resources:
-            self.send_raw('resource#', rtype, '#', rloc, '#', sep='')
-            for rid, ric in rlist:
-                self.send_raw('resource_entry#', rtype, '#', rloc, '#', rid, '#', ric, '#', sep='')
-
-    def send_timeline_snapshots(self, snapshot_list):
-        self.send_raw("timeline_snapshots#")
-        for snapshot in snapshot_list:
-            self.send_raw('tsnapshot#', snapshot.id, '#', snapshot.ic, '#', sep='')
-
-    def send_timeline_switched(self, timeline_name):
-        self.send_raw("Switched to timeline#" + timeline_name)
-
-    def send_newtimeline_success(self, name):
-        self.send_raw("newtimeline successful")
-
-    def send_file_pos(self, formatted_line):
-        self.send_raw('>', formatted_line, prefix='')
-
-    def send_expect_input(self):
-        self.send_raw("expect input#")
-
-    def send_stdout(self, stdout):
-        self.send_raw("-->")
-        self.send_raw(stdout, prefix="#->", end='')
-
-    def send_break_nosuccess(self, filename, lineno, reason):
-        self.send_raw("error while making breakpoint")
-
-    def send_break_success(self, number, filename, lineno):
-        self.send_raw("breakpoint made")
-
-    def send_program_finished(self):
-        self.send_raw("Program has finished")
-
-    def send_message(self, message):
-        self.send_raw("message:" + message)
-
-    def send_debugmessage(self, message):
-        self.send_raw("debug: " + message)
-
-    def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
-        output = io.StringIO()
-        print(value, *args, sep=sep, end=end, file=output)
-        for line in output.getvalue().splitlines():
-            print(prefix + line)
-
 class Epdb(pdb.Pdb):
     def __init__(self, uds_file=None, dbgmods=[]):
         pdb.Pdb.__init__(self, skip=dbg.skipped_modules)
-        #asyncmd.Asyncmd.__init__(self)
         if uds_file:
-            dbg.dbgcom = self.dbgcom = UdsDbgCom(self, uds_file)
+            dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
         else:
-            dbg.dbgcom = self.dbgcom = StdDbgCom(self)
+            dbg.dbgcom = self.dbgcom = epdblib.communication.StdDbgCom(self)
         self.dbgmods = dbgmods
         self.init_reversible()
 
@@ -845,7 +183,7 @@ class Epdb(pdb.Pdb):
         #fdebug("make snapshot", dbg.ic, self.snapshot_id)
         #stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
 
-        snapshot = snapshotting.Snapshot(dbg.ic, self.snapshot_id)
+        snapshot = epdblib.snapshotting.Snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
@@ -893,6 +231,7 @@ class Epdb(pdb.Pdb):
         t = time.time()
         self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
         if self.command_running_start_time:
+            print("time: t:", t, "self.start_running_time:", self.command_running_start_time)
             self.dbgcom.send_time(t-self.command_running_start_time)
         else:
             self.dbgcom.send_time()
@@ -950,11 +289,10 @@ class Epdb(pdb.Pdb):
         self.command_running_start_time = None
         #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp()
-        self.mp = snapshotting.MainProcess()
-        #self.ic = 0             # Instruction Counter
+        self.mp = epdblib.snapshotting.MainProcess()
         self.ron = True
 
-        dbg.ic = 0
+        dbg.ic = 0 # Instruction Counter
 
         self.ss_ic = 0
         self.snapshot = None
@@ -985,24 +323,12 @@ class Epdb(pdb.Pdb):
         self.starttime = None
         self.runningtime = 0
 
-        self.breaks = shareddict.DictProxy('breaks')
-        self.snapshots = shareddict.DictProxy('snapshots')
+        self.breaks = epdblib.shareddict.DictProxy('breaks')
+        self.snapshots = epdblib.shareddict.DictProxy('snapshots')
 
         dbg.current_timeline.new_resource('__stdout__', '')
-        stdout_resource_manager = resources.StdoutResourceManager()
+        stdout_resource_manager = epdblib.resources.StdoutResourceManager()
         stdout_manager = dbg.current_timeline.create_manager(('__stdout__', ''), stdout_resource_manager)
-        #
-        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
-        #self.dbgcom.send_debugmessage("stdout_manager: " + repr(type(stdout_manager)))
-        #stdout_manager.update_stdout("New line\n")
-        #
-        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
-        #self.dbgcom.send_debugmessage("stdout_manager: " + repr(stdout_manager.stdout_cache))
-        #stdout_manager.update_stdout("line2\n")
-        #
-        #stdout_manager = dbg.current_timeline.get_manager(('__stdout__',''))
-        #self.dbgcom.send_debugmessage("stdout_manager2: " + repr(stdout_manager.stdout_cache))
-        #
         id = stdout_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic] = id
 
@@ -2105,5 +1431,3 @@ def post_mortem(t=None):
 
 def pm():
     post_mortem(sys.last_traceback)
-
-    # Main program for testing

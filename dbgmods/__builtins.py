@@ -4,7 +4,7 @@
 
 #import builtins
 import types
-import dbg
+from epdblib import dbg
 from io import SEEK_SET, SEEK_END, SEEK_CUR
 import io
 import os
@@ -12,11 +12,11 @@ import os.path
 import sys
 import _thread
 from uuid import uuid4
-import debug as log
+from epdblib import debug as log
 import shelve
 import base64
 import traceback
-import resources
+from epdblib import resources
 
 __orig__print = print
 def print(*args, sep=' ', end='\n', file=sys.stdout):
