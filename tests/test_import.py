@@ -32,7 +32,7 @@ class NormalImportTestCase(unittest.TestCase):
         import random
         imp.reload(random)
         t = random.randint(1,2)
-        self.assertEqual(t, 42) 
+        self.assertEqual(t, 42)
         self.assertIn('random', self.dbg.skip)
 
     def test_patch_random_from(self):
@@ -41,7 +41,7 @@ class NormalImportTestCase(unittest.TestCase):
             del sys.modules['random']
         from random import randint
         t = randint(1,2)
-        self.assertEqual(t, 42) 
+        self.assertEqual(t, 42)
         self.assertIn('random', self.dbg.skip)
 
     def test_patch_spam_ham(self):
@@ -49,14 +49,14 @@ class NormalImportTestCase(unittest.TestCase):
         import spam.eggs.ham
         self.assertEqual(42, spam.eggs.ham.hello_world())
         self.assertIn('spam.eggs.ham', self.dbg.skip)
-        
+
     def test_builtins(self):
         print('\n')
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
         import builtins
         self.assertEqual(builtins.dir(), "patched dir")
-        
+
     def tearDown(self):
         self.cov.stop()
         self.cov.save()

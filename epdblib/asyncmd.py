@@ -4,8 +4,8 @@ import select
 import sys
 
 class Asyncmd(cmd.Cmd):
-    def __init__(self):
-        cmd.Cmd.__init__(self)
+    def __init__(self, stdin=None, stdout=None):
+        cmd.Cmd.__init__(self, stdin=stdin, stdout=stdout)
         self.loopstarted = False
         self.use_rawinput = False
 
@@ -23,7 +23,7 @@ class Asyncmd(cmd.Cmd):
             self.loopstarted = True
             if self.intro:
                 self.stdout.write(str(self.intro)+"\n")
-            print(self.prompt, end='')
+            print(self.prompt, end='', file=self.stdout)
             sys.stdout.flush()
 
         #if self.use_rawinput and self.completekey:
@@ -35,7 +35,7 @@ class Asyncmd(cmd.Cmd):
         #    except ImportError:
         #        pass
 
-        inp, _, _ = select.select([sys.stdin],[],[],0)
+        inp, _, _ = select.select([self.stdin],[],[],0)
         if inp == []:
             return False
 
@@ -44,7 +44,7 @@ class Asyncmd(cmd.Cmd):
             stop = None
             while not stop:
                 #print("loop")
-                inp, _, _ = select.select([sys.stdin],[],[],0)
+                inp, _, _ = select.select([self.stdin],[],[],0)
                 #print(inp, self.cmdqueue)
                 if self.cmdqueue == [] and inp == []:
                     break
@@ -67,7 +67,7 @@ class Asyncmd(cmd.Cmd):
                 stop = self.onecmd(line)
                 stop = self.postcmd(stop, line)
                 if not stop:
-                    print(self.prompt, end='')
+                    print(self.prompt, end='', file=self.stdout)
                     sys.stdout.flush()
         finally:
             pass

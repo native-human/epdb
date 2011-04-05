@@ -35,6 +35,7 @@ class ArgumentTestCase(unittest.TestCase):
                           epdb.parse_args, ['epdb.py', '--uds'])
         self.assertRaises(epdb.UsageException,
                           epdb.parse_args, ['epdb.py'])
+
     def tearDown(self):
         epdblib.debugger.Epdb = self._orig_epdb_cls
         self.cov.stop()
