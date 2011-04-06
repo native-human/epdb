@@ -24,7 +24,7 @@ class NormalImportTestCase(unittest.TestCase):
         self.dbg = DebuggerStub()
         sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self.dbg, dbgmods=['./dbgmods']))
         sys.meta_path.append(PrintImportHook())
-        self.cov = coverage(source=["epdblib"], cover_pylib=True)
+        self.cov = coverage(data_file=".coverage.import", source=["epdblib"], cover_pylib=True)
         self.cov.start()
 
     def test_patch_random(self):

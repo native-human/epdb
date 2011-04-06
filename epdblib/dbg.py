@@ -14,7 +14,8 @@ skipped_modules = ['time', 'debug', 'fnmatch', 'epdb',
                 'threading', 'ctypes._endian', 'copyreg', 'ctypes.util',
                 'sre_compile', 'abc', '_weakrefset', 'base64', 'dbm',
                 'traceback', 'tokenize', 'dbm.gnu', 'dbm.ndbm', 'dbm.dumb',
-                'functools', 'epdblib.resources', 'bdb', 'debug', 'runpy', 'genericpath',
+                'functools', 'epdblib.resources', 'epdblib.debugger', 'bdb',
+                'debug', 'runpy', 'genericpath',
                 'encodings.ascii', 'configparser', 'itertools', 'copy', 'linecache',
                 'mimetypes', 'urllib.parse', 'urllib', 'inspect', 'dis', 'opcode',
                 'textwrap', 'http', 'http.client', 'email', 'email.parser',
@@ -73,9 +74,9 @@ nde = {}
 # ude ... undo effects dictionary ic:effect effect is a function
 ude = {}
 
-# undod
-# Will be overwritten by an Proxy
-undod = {}
+## undod
+## Will be overwritten by an Proxy
+#undod = {}
 
 #manager = None
 #server = None

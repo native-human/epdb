@@ -13,7 +13,7 @@ class ArgumentTestCase(unittest.TestCase):
     def setUp(self):
         self._orig_epdb_cls = epdblib.debugger.Epdb
         epdblib.debugger.Epdb = EpdbStub
-        self.cov = coverage(source=['epdb', "epdblib"], cover_pylib=True)
+        self.cov = coverage(data_file=".coverage.opts", source=['epdb', "epdblib"], cover_pylib=True)
         self.cov.start()
 
     def test_uds_file(self):

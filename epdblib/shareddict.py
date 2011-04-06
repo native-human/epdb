@@ -372,7 +372,7 @@ def server(dofork=False):
         pass
     server = listen('/tmp/shareddict')
     if dofork:
-        sdpid = os.fork()
+        sdpid = os.fork() # TODO dofork returns when the server shutdowns?
         if not sdpid:
             return sdpid
     do_quit = False
@@ -785,7 +785,6 @@ def shutdown():
     #debug("Shutting down")
     conn = connect('/tmp/shareddict')
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
-
 
 if __name__ == '__main__':
     server(dofork=True)

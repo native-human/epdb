@@ -5,7 +5,6 @@ from coverage import coverage
 import multiprocessing
 import collections
 import multiprocessing.managers
-import time
 
 class EpdbStub:
     def __init__(self, uds_file=None, dbgmods=[]):
@@ -207,7 +206,7 @@ class StdComTestCase(unittest.TestCase):
         stdout = Connection2Stdout(client_cnx)
         if 'epdblib.communication' in sys.modules:
             del sys.modules['epdblib.communication']
-        self.cov = coverage(source=["epdblib"], cover_pylib=True)
+        self.cov = coverage(data_file=".coverage.com", source=["epdblib"], cover_pylib=True)
         self.cov.start()
         import epdblib.communication
         dbg = self.debugger
