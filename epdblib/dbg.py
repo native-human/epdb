@@ -90,3 +90,6 @@ ic = 0
 
 # modules to skip at next user_line
 skip_modules = set([])
+
+# The children pids of each (snapshot) process
+cpids = []

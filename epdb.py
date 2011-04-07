@@ -96,7 +96,7 @@ def parse_args(argv):
     return epdb, mainpyfile
         
 def main():
-    print("sys.argv", sys.argv)
+    #print("sys.argv", sys.argv)
     try:
         epdb, mainpyfile = parse_args(sys.argv)
     except UsageException as e:
@@ -104,7 +104,7 @@ def main():
     except HelpException as e:
         help()
         sys.exit(0)
-    print("mainpyfile", mainpyfile)
+    #print("mainpyfile", mainpyfile)
     #print("udsfile", uds_file)
     if not os.path.exists(mainpyfile):
         print('Error:', mainpyfile, 'does not exist')

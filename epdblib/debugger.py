@@ -183,7 +183,8 @@ class Epdb(pdb.Pdb):
         #fdebug("make snapshot", dbg.ic, self.snapshot_id)
         #stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
 
-        snapshot = epdblib.snapshotting.Snapshot(dbg.ic, self.snapshot_id)
+        #snapshot = epdblib.snapshotting.Snapshot(dbg.ic, self.snapshot_id)
+        snapshot = self.mp.make_snapshot(dbg.ic, self.snapshot_id)
         self.psnapshot = self.snapshot
         self.psnapshot_id = self.snapshot_id
         self.pss_ic = self.ss_ic
@@ -231,7 +232,7 @@ class Epdb(pdb.Pdb):
         t = time.time()
         self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
         if self.command_running_start_time:
-            print("time: t:", t, "self.start_running_time:", self.command_running_start_time)
+            #print("time: t:", t, "self.start_running_time:", self.command_running_start_time)
             self.dbgcom.send_time(t-self.command_running_start_time)
         else:
             self.dbgcom.send_time()

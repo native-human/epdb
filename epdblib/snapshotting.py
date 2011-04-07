@@ -29,101 +29,108 @@ class ControllerExit(Exception):
 
 class Snapshot:
     # activated ... if the snaphot was activated or not
-    def __init__(self, ic, psnapshot):
+    def __init__(self, ic, psnapshot, sock_name):
         self.ic = ic
         self.psnapshot = psnapshot
         # This is done before forking because of synchronization
         self.cpids = []
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.connect(SOCK_NAME)
-        msging = Messaging(s)
-        msging.send('snapshot {0} {1}'.format(self.ic, psnapshot))
-        msg = msging.recv()
+        s.connect(sock_name)
+        self.msging = Messaging(s)
+        self.msging.send('snapshot {0} {1}'.format(self.ic, psnapshot))
+        msg = self.msging.recv()
         args = msg.split(' ')
         cmd = args[0]
         self.id = int(args[1])
         if cmd != 'ok':
             # TODO better Error handling
             raise Exception()
-
+            
+        oldpid = os.getpid()
         pid = os.fork()
         self.pid = pid
         if pid:
             # Parent
-            self.activated = True
-            self.cpids.append(pid)
-            while True:
-                msg = msging.recv()
-                args = msg.split()
-                cmd = args[0]
-                if cmd == "close":
-                    #log.debug('Savepoint quit ... Wait for subprocess')
-                    while self.cpids != []:
-                        (pid,status) = os.wait()
-                        idx = self.cpids.index(pid)
-                        del self.cpids[idx]
-                    #log.debug('Savepoint quit')
-                    raise SnapshotExit()
-                if cmd == "run":
-                    steps = int(args[1])
-                    rpid = os.fork()
-                    if rpid:
-                        self.cpids.append(rpid)
-                    else:
-                        self.activation_type = "step_forward"
-                        self.step_forward = steps
-                        dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.nde = dbg.current_timeline.get_nde()
-                        #dbg.undod = dbg.current_timeline.get_ude()
-                        break
-
-                if cmd == "runic":
-                    ic = int(args[1])
-                    rpid = os.fork()
-                    if rpid:
-                        self.cpids.append(rpid)
-                    else:
-                        self.activation_type = "stop_at_ic"
-                        self.stop_at_ic = ic
-                        dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.nde = dbg.current_timeline.get_nde()
-                        #dbg.undod = dbg.current_timeline.get_ude()
-                        break
-
-                elif cmd == "runnext":
-                    # Run until a given nocalls is reached
-                    nocalls = int(args[1])
-                    rpid = os.fork()
-                    if rpid:
-                        self.cpids.append(rpid)
-                    else:
-                        #self.step_forward = steps
-                        self.activation_type = "stopatnocalls"
-                        self.nocalls = nocalls
-                        dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.nde = dbg.current_timeline.get_nde()
-                        #dbg.undod = dbg.current_timeline.get_ude()
-                        break
-                elif cmd == "runcontinue":
-                    # Run until a given nocalls is reached
-                    rpid = os.fork()
-                    if rpid:
-                        self.cpids.append(rpid)
-                    else:
-                        #self.step_forward = steps
-                        self.activation_type = "continue"
-                        dbg.current_timeline = dbg.timelines.get_current_timeline()
-                        dbg.nde = dbg.current_timeline.get_nde()
-                        #dbg.undod = dbg.current_timeline.get_ude()
-                        break
-        else:
+            dbg.cpids.append(pid)
             dbg.current_timeline = dbg.timelines.get_current_timeline()
             dbg.nde = dbg.current_timeline.get_nde()
-            #dbg.undod = dbg.current_timeline.get_ude()
             self.step_forward = -1
             self.activated = False
             self.activation_type = None
+        else:
+            del dbg.cpids[:]
+            self.block()
 
+    def block(self):
+        self.activated = True
+        while True:
+            msg = self.msging.recv()
+            args = msg.split()
+            cmd = args[0]
+            if cmd == "close":
+                #log.debug('Savepoint quit ... Wait for subprocess')
+                while dbg.cpids != []:
+                    (pid,status) = os.wait()
+                    idx = dbg.cpids.index(pid)
+                    del dbg.cpids[idx]
+                #log.debug('Savepoint quit')
+                raise SnapshotExit()
+            if cmd == "run":
+                steps = int(args[1])
+                rpid = os.fork()
+                if rpid:
+                    dbg.cpids.append(rpid)
+                else:
+                    del dbg.cpids[:]
+                    self.activation_type = "step_forward"
+                    self.step_forward = steps
+                    dbg.current_timeline = dbg.timelines.get_current_timeline()
+                    dbg.nde = dbg.current_timeline.get_nde()
+                    #dbg.undod = dbg.current_timeline.get_ude()
+                    break
+
+            if cmd == "runic":
+                ic = int(args[1])
+                rpid = os.fork()
+                if rpid:
+                    dbg.cpids.append(rpid)
+                else:
+                    del dbg.cpids[:]
+                    self.activation_type = "stop_at_ic"
+                    self.stop_at_ic = ic
+                    dbg.current_timeline = dbg.timelines.get_current_timeline()
+                    dbg.nde = dbg.current_timeline.get_nde()
+                    #dbg.undod = dbg.current_timeline.get_ude()
+                    break
+
+            elif cmd == "runnext":
+                # Run until a given nocalls is reached
+                nocalls = int(args[1])
+                rpid = os.fork()
+                if rpid:
+                    dbg.cpids.append(rpid)
+                else:
+                    del dbg.cpids[:]
+                    #self.step_forward = steps
+                    self.activation_type = "stopatnocalls"
+                    self.nocalls = nocalls
+                    dbg.current_timeline = dbg.timelines.get_current_timeline()
+                    dbg.nde = dbg.current_timeline.get_nde()
+                    #dbg.undod = dbg.current_timeline.get_ude()
+                    break
+            elif cmd == "runcontinue":
+                # Run until a given nocalls is reached
+                rpid = os.fork()
+                if rpid:
+                    dbg.cpids.append(rpid)
+                else:
+                    del dbg.cpids[:]
+                    #self.step_forward = steps
+                    self.activation_type = "continue"
+                    dbg.current_timeline = dbg.timelines.get_current_timeline()
+                    dbg.nde = dbg.current_timeline.get_nde()
+                    #dbg.undod = dbg.current_timeline.get_ude()
+                    break
 class Messaging:
     """This is wrapper around sockets, which allow to send and receive fixed
     length messages"""
@@ -148,7 +155,6 @@ class Messaging:
         totalsent = 0
         while totalsent < self.MSG_LEN:
             sent = self.sock.send(msg[totalsent:])
-            #print('sent successfull ' + str(sent))
             if sent == 0:
                 raise RuntimeError("socket connection broken")
             totalsent = totalsent + sent
@@ -160,7 +166,6 @@ class Messaging:
             if chunk == '':
                 raise RuntimeError("socket connection broken")
             msg = msg + chunk
-            # print('recv', len(chunk), len(msg))
         msg = msg.decode('ascii')
         return msg.rstrip()
     def close(self):
@@ -195,139 +200,154 @@ class SavepointConnection:
 class MainProcess:
     """This class forks the controller process. The controller process ends up
     in a loop. The other process returns with a connection to the controller"""
-    def __init__(self):
+    def __init__(self, startserver=True):
         debuggee_sock, controller_sock = socket.socketpair()
         debuggee = Messaging(debuggee_sock)
         self.debuggee = debuggee
-        controller = Messaging(controller_sock)
-        backupcontroller = controller # TODO remove
-        sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sp_sock.bind(SOCK_NAME)
-        sp_sock.listen(10)
+        self.controller = Messaging(controller_sock)
+        self.sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock_name = SOCK_NAME
+        self.sp_sock.bind(self.sock_name)
+        self.sp_sock.listen(10)
         self.savepoint_connections = []
         self.do_quit = False
+        
+        if startserver:
+            self.start_shareddict_server()
+            self.pid = os.fork()
+            if self.pid:
+                self.server()
+                os.waitpid(self.pid,0) # wait for the child process
+                shareddict.shutdown()
+                sys.exit(0)
+            else:
+                self.set_up_client()
+
+    def start_shareddict_server(self):
         sdpid = shareddict.server(dofork=True)
 
-        pid = os.fork()
-        if pid:
-            max_id = 0
-            p = select.poll()
-            p.register(controller.sock, select.POLLIN|select.POLLPRI)
-            p.register(sp_sock, select.POLLIN|select.POLLPRI)
-            while True:
-                list = p.poll(100)
-                if list == []:
-                    if self.do_quit:
-                        shareddict.shutdown()
-                        os.waitpid(pid,0)
-                        os.unlink(SOCK_NAME)
-                        sys.exit(0)
-                for event in list:
-                    fd, ev = event
+    def set_up_client(self):
+        dbg.timelines = shareddict.TimelinesProxy()
+        dbg.current_timeline = dbg.timelines.new_timeline()
+        name = dbg.current_timeline.get_name()
+        dbg.timelines.set_current_timeline(name)
+        dbg.nde = dbg.current_timeline.get_nde()
+            
+    def server(self):
+        max_id = 0
+        p = select.poll()
+        p.register(self.controller.sock, select.POLLIN|select.POLLPRI)
+        p.register(self.sp_sock, select.POLLIN|select.POLLPRI)
+        while True:
+            list = p.poll(100)
+            if list == []:
+                if self.do_quit:
+                    os.unlink(self.sock_name)
+                    return
+                    #sys.exit(0)
+            for event in list:
+                fd, ev = event
 
-                    # Controller Code
+                # Controller Code
 
-                    if fd == controller.sock.fileno():
-                        line = controller.recv()
-                        words = line.rstrip().split(" ")
-                        cmd = str(words[0])
-                        if cmd == "end":
-                            for conn in self.savepoint_connections:
-                                try:
-                                    conn.quit()
-                                except:
-                                    log.debug("Warning: Shuting down of Savepoint failed")
-                            self.do_quit = True
-                        elif cmd == 'connect':
-                            arg = words[1]
-                            controller.send("Connected " + arg)
-                        elif cmd == 'showlist':
-                            log.debug('ID           InstructionNr    PSnapshot')
-                            log.debug('----------------------------')
-                            for s in self.savepoint_connections:
-                                log.debug("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
-                            log.debug('Number of snapshots: %d' %
-                                     len(self.savepoint_connections))
-                            controller.send('ok')
-                        elif cmd == 'activate': # TODO rename sp (savepoint) to snapshot
-                            spid = int(words[1])
-                            steps = int(words[2])
-                            for s in self.savepoint_connections: # TODO rename savepoint connection
-                                if s.id == spid:
-                                    sp = s
-                                    break
-                            sp = self.savepoint_connections[spid]
-                            sp.activate(steps)
-
-                        elif cmd == 'activateic':
-                            ssid = int(words[1])
-                            ic = int(words[2])
-                            for s in self.savepoint_connections: # TODO rename savepoint connection
-                                if s.id == ssid:
-                                    sp = s
-                                    break
-                            sp = self.savepoint_connections[ssid]
-                            sp.activateic(ic)
-
-                        elif cmd == 'activatenext':
-                            ssid = int(words[1])
-                            nocalls = int(words[2])
-                            for s in self.savepoint_connections: # TODO rename savepoint connection
-                                if s.id == ssid:
-                                    ss = s
-                                    break
-                            ss = self.savepoint_connections[ssid]
-                            ss.activatenext(nocalls)
-
-                        elif cmd == 'activatecontinue':
-                            ssid = int(words[1])
-                            for s in self.savepoint_connections: # TODO rename savepoint connection
-                                if s.id == ssid:
-                                    ss = s
-                                    break
-                            ss = self.savepoint_connections[ssid]
-                            ss.activatecontinue()
-                        else:
-                            log.debug(cmd)
-
-                    # New Savepoint/Debuggee Connection
-                    elif fd == sp_sock.fileno():
-                        conn, addr = sp_sock.accept()
-                        msging = Messaging(conn)
-                        msg = msging.recv().split()
-                        type = msg[0]
-                        if type == 'snapshot':
-                            arg1 = msg[1]
-                            arg2 = msg[2]
-                            if arg2 == 'None':
-                                psnapshot = None
-                            else:
-                                psnapshot = int(arg2)
-                            ic = int(arg1)
-                            sp = SavepointConnection(msging, max_id, ic, psnapshot)
-                            self.savepoint_connections.append(sp)
-                            msging.send('ok {0}'.format(max_id))
-                            max_id += 1
-                            if self.do_quit:
-                                sp.quit()
-                        else:
-                            log.info("Critical Error")
-                    else:
+                if fd == self.controller.sock.fileno():
+                    line = self.controller.recv()
+                    words = line.rstrip().split(" ")
+                    cmd = str(words[0])
+                    if cmd == "end":
                         for conn in self.savepoint_connections:
-                            if fd == conn.msging.sock.fileno():
-                                conn.respond()
+                            try:
+                                conn.quit()
+                            except:
+                                log.debug("Warning: Shuting down of Savepoint failed")
+                        self.do_quit = True
+                    elif cmd == 'connect':
+                        arg = words[1]
+                        self.controller.send("Connected " + arg)
+                    elif cmd == 'showlist':
+                        log.debug('ID           InstructionNr    PSnapshot')
+                        log.debug('----------------------------')
+                        for s in self.savepoint_connections:
+                            log.debug("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
+                        log.debug('Number of snapshots: %d' %
+                                 len(self.savepoint_connections))
+                        self.controller.send('ok')
+                    elif cmd == 'activate': # TODO rename sp (savepoint) to snapshot
+                        spid = int(words[1])
+                        steps = int(words[2])
+                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                            if s.id == spid:
+                                sp = s
                                 break
+                        sp = self.savepoint_connections[spid]
+                        sp.activate(steps)
+
+                    elif cmd == 'activateic':
+                        ssid = int(words[1])
+                        ic = int(words[2])
+                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                            if s.id == ssid:
+                                sp = s
+                                break
+                        sp = self.savepoint_connections[ssid]
+                        sp.activateic(ic)
+
+                    elif cmd == 'activatenext':
+                        ssid = int(words[1])
+                        nocalls = int(words[2])
+                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                            if s.id == ssid:
+                                ss = s
+                                break
+                        ss = self.savepoint_connections[ssid]
+                        ss.activatenext(nocalls)
+
+                    elif cmd == 'activatecontinue':
+                        ssid = int(words[1])
+                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                            if s.id == ssid:
+                                ss = s
+                                break
+                        ss = self.savepoint_connections[ssid]
+                        ss.activatecontinue()
+                    else:
+                        log.debug(cmd)
+
+                # New Savepoint/Debuggee Connection
+                elif fd == self.sp_sock.fileno():
+                    conn, addr = self.sp_sock.accept()
+                    msging = Messaging(conn)
+                    msg = msging.recv().split()
+                    type = msg[0]
+                    if type == 'snapshot':
+                        arg1 = msg[1]
+                        arg2 = msg[2]
+                        if arg2 == 'None':
+                            psnapshot = None
                         else:
-                            log.info('Unknown fd: %s' % fd)
-                            os.unlink(SOCK_NAME)
-                            sys.exit(0)
-        else:
-            dbg.timelines = shareddict.TimelinesProxy()
-            dbg.current_timeline = dbg.timelines.new_timeline()
-            name = dbg.current_timeline.get_name()
-            dbg.timelines.set_current_timeline(name)
-            dbg.nde = dbg.current_timeline.get_nde()
-            #dbg.undod = dbg.current_timeline.get_ude()
+                            psnapshot = int(arg2)
+                        ic = int(arg1)
+                        sp = SavepointConnection(msging, max_id, ic, psnapshot)
+                        self.savepoint_connections.append(sp)
+                        msging.send('ok {0}'.format(max_id))
+                        max_id += 1
+                        if self.do_quit:
+                            sp.quit()
+                    else:
+                        log.info("Critical Error")
+                else:
+                    for conn in self.savepoint_connections:
+                        if fd == conn.msging.sock.fileno():
+                            conn.respond()
+                            break
+                    else:
+                        log.info('Unknown fd: %s' % fd)
+                        os.unlink(self.sock_name)
+                        #sys.exit(0)
+                        return
+
+    def make_snapshot(self, ic, psnapshot):
+        return Snapshot(ic, psnapshot, self.sock_name)
 
     def list_snapshots(self):
         """Tell the controller to list all snapshots."""
