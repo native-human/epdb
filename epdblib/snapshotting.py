@@ -68,12 +68,10 @@ class Snapshot:
             args = msg.split()
             cmd = args[0]
             if cmd == "close":
-                #log.debug('Savepoint quit ... Wait for subprocess')
                 while dbg.cpids != []:
                     (pid,status) = os.wait()
                     idx = dbg.cpids.index(pid)
                     del dbg.cpids[idx]
-                #log.debug('Savepoint quit')
                 raise SnapshotExit()
             if cmd == "run":
                 steps = int(args[1])

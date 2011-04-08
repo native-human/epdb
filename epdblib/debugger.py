@@ -96,12 +96,14 @@ class SnapshotData:
         self.references = 0
 
 class Epdb(pdb.Pdb):
-    def __init__(self, uds_file=None, dbgmods=[]):
+    def __init__(self, com=None, dbgmods=[]):
         pdb.Pdb.__init__(self, skip=dbg.skipped_modules)
-        if uds_file:
-            dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
-        else:
+        if not com:
             dbg.dbgcom = self.dbgcom = epdblib.communication.StdDbgCom(self)
+        else:
+            dbg.dbgcom = self.dbgcom = com
+            self.dbgcom.set_debugger(self)
+            #dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
         self.dbgmods = dbgmods
         self.init_reversible()
 
@@ -838,20 +840,17 @@ class Epdb(pdb.Pdb):
             #debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
-            debug("Next in redo mode")
             nextd = dbg.current_timeline.get_next()
             nextic = nextd.get(dbg.ic, "empty")
             bpic = self.findnextbreakpointic()
 
             if nextic == "empty":
                 # There is no function call in the current line -> same as stepping
-                debug('nextic=empty')
                 s = self.findsnapshot(dbg.ic+1)
                 nextic = dbg.ic + 1
             elif nextic is None and bpic == -1:
                 # The next command has to switch to normal mode at some point
                 # Use the highest available snapshot
-                debug("mode switch next")
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
                     #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)

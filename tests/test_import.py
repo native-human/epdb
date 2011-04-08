@@ -1,4 +1,5 @@
 from coverage import coverage
+from helpers import CoverageTestCase
 import epdblib.importer
 import unittest
 import sys
@@ -19,14 +20,20 @@ class DebuggerStub:
     def add_skip_module(self, module):
         self.skip.add(module)
 
-class NormalImportTestCase(unittest.TestCase):
+class ImportTestCase(CoverageTestCase):
     def setUp(self):
         self.dbg = DebuggerStub()
+        
+        CoverageTestCase.setUp(self)
+        
         sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self.dbg, dbgmods=['./dbgmods']))
         sys.meta_path.append(PrintImportHook())
-        self.cov = coverage(data_file=".coverage.import", source=["epdblib"], cover_pylib=True)
-        self.cov.start()
 
+    def tearDown(self):
+        CoverageTestCase.tearDown(self)
+        del sys.meta_path[:]
+
+class PatchRandomTestCase(ImportTestCase):
     def test_patch_random(self):
         print('\n')
         import random
@@ -35,6 +42,7 @@ class NormalImportTestCase(unittest.TestCase):
         self.assertEqual(t, 42)
         self.assertIn('random', self.dbg.skip)
 
+class PatchRandomFromTestCase(ImportTestCase):
     def test_patch_random_from(self):
         print('\n')
         if 'random' in sys.modules.keys():
@@ -44,23 +52,23 @@ class NormalImportTestCase(unittest.TestCase):
         self.assertEqual(t, 42)
         self.assertIn('random', self.dbg.skip)
 
+class PatchSubmodulesTestCase(ImportTestCase):
     def test_patch_spam_ham(self):
         print('\n')
         import spam.eggs.ham
         self.assertEqual(42, spam.eggs.ham.hello_world())
         self.assertIn('spam.eggs.ham', self.dbg.skip)
 
+class ImportTestCase(ImportTestCase):
     def test_builtins(self):
         print('\n')
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
+        if 'epdblib.importer' in sys.modules:
+            del sys.modules['epdblib.importer']
+        import epdblib.importer
         import builtins
         self.assertEqual(builtins.dir(), "patched dir")
-
-    def tearDown(self):
-        self.cov.stop()
-        self.cov.save()
-        del sys.meta_path[:]
 
 if __name__ == '__main__':
     unittest.main()

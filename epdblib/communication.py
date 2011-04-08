@@ -16,6 +16,9 @@ class UdsDbgCom():
         self.cmdqueue = []
         self.identchars = string.ascii_letters + string.digits + '_'
 
+    def set_debugger(self, debugger):
+        self.debugger = debugger
+
     def do_p(self, arg):
         return self.debugger.cmd_print(arg)
     do_print = do_p

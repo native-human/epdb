@@ -86,7 +86,8 @@ def parse_args(argv):
     # changed by the user from the command line. There is a "restart" command
     # which allows explicit specification of command line arguments.
     if use_uds:
-        epdb = epdblib.debugger.Epdb(uds_file=uds_file, dbgmods=dbgmods)
+        dbgcom = epdblib.communication.UdsDbgCom(None, uds_file)
+        epdb = epdblib.debugger.Epdb(com=dbgcom, dbgmods=dbgmods)
     else:
         epdb = epdblib.debugger.Epdb(dbgmods=dbgmods)
     
