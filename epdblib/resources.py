@@ -11,7 +11,6 @@ import fcntl
 from uuid import uuid4
 from epdblib.debug import debug
 
-
 def _close(self):
     shelve.Shelf.close(self)
     fcntl.flock(self.lckfile.fileno(), LOCK_UN)

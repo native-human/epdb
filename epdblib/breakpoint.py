@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from shareddict import DictProxy
-from shareddict import ListProxy
-from debug import debug
+from epdblib.shareddict import DictProxy
+from epdblib.shareddict import ListProxy
+from epdblib.debug import debug
 
 import sys
 

@@ -138,7 +138,7 @@ class Epdb(pdb.Pdb):
         """Looks for the next ic that has a breakpoint. It only looks at executed
         instruction counts. Returns -1 if nothing was found"""
         continued = dbg.current_timeline.get_continue()
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         bestic = -1
         for bp in Breakpoint.bplist:
             #debug("Checking Bp: ", bp)
@@ -161,7 +161,7 @@ class Epdb(pdb.Pdb):
         """Looks for a preceding ic that has a breakpoint. It only looks at executed
         instruction counts. Returns 0 if nothing was found"""
         continued = dbg.current_timeline.get_continue()
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         bestic = 0
         for bp in Breakpoint.bplist:
             #debug("Checking Bp: ", bp)
@@ -1041,7 +1041,7 @@ class Epdb(pdb.Pdb):
 
     def set_break(self, filename, lineno, temporary=0, cond = None,
                   funcname=None):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         filename = self.canonic(filename)
         #import linecache # Import as late as possible
         line = linecache.getline(filename, lineno)
@@ -1059,7 +1059,7 @@ class Epdb(pdb.Pdb):
         #bp = Breakpoint(filename, lineno, temporary, cond, funcname)
 
     def clear_break(self, filename, lineno):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         debug("Clear Break")
         filename = self.canonic(filename)
         if not filename in self.breaks:
@@ -1084,7 +1084,7 @@ class Epdb(pdb.Pdb):
 
 
     def clear_bpbynumber(self, arg):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         try:
             number = int(arg)
         except:
@@ -1098,7 +1098,7 @@ class Epdb(pdb.Pdb):
         self.clear_break(bp.file, bp.line)
 
     def clear_all_file_breaks(self, filename):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         filename = self.canonic(filename)
         if not filename in self.breaks:
             return 'There are no breakpoints in %s' % filename
@@ -1109,7 +1109,7 @@ class Epdb(pdb.Pdb):
         del self.breaks[filename]
 
     def clear_all_breaks(self):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         if not self.breaks:
             return 'There are no breakpoints'
         for bp in Breakpoint.bpbynumber:
@@ -1124,7 +1124,7 @@ class Epdb(pdb.Pdb):
             lineno in self.breaks[filename]
 
     def get_breaks(self, filename, lineno):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         filename = self.canonic(filename)
         #if filename in self.breaks:
         #    debug("Get_breaks: Filename", filename)
@@ -1143,13 +1143,13 @@ class Epdb(pdb.Pdb):
         return self.breaks
 
     def cmd_show_break(self, arg):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         debug("Breakpoint by number: ", Breakpoint.bpbynumber)
         debug("Breakpoint list: ", Breakpoint.bplist)
         debug("self.breaks: ", self.breaks)
 
     def cmd_break(self, arg, temporary = 0):
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         # break [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
             if self.breaks:  # There's at least one
@@ -1258,7 +1258,7 @@ class Epdb(pdb.Pdb):
         clear -> clear all breaks, ask for confirmation
         clear file:lineno -> clear all breaks at file:lineno
         clear bpno bpno ... -> clear breakpoints by number"""
-        from breakpoint import Breakpoint
+        from epdblib.breakpoint import Breakpoint
         if not arg:
             try:
                 reply = input('Clear all breaks? ')
@@ -1349,7 +1349,7 @@ def effective(file, line, frame):
     that indicates if it is ok to delete a temporary bp.
 
     """
-    from breakpoint import Breakpoint
+    from epdblib.breakpoint import Breakpoint
     possibles = Breakpoint.bplist[file, line]
     for i in range(0, len(possibles)):
         b = possibles[i]
