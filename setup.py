@@ -7,5 +7,6 @@ setup(name='epdb',
       author_email='patricksabin@gmx.at',
       url='http://code.google.com/p/epdb/',
       packages=['epdblib'],
-      scripts=['bin/epdb']
+      #scripts=['bin/epdb'],
+      py_modules=['epdb']
       )

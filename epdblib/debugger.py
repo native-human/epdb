@@ -144,7 +144,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def is_skipped_module(self, module_name):
         """Extend to skip all modules that start with double underscore"""
-        base = pdb.Pdb.is_skipped_module(self, module_name)
+        base = super().is_skipped_module(self, module_name)
         if base == True:
             return True
         #debug("not skipped", module_name)
@@ -996,8 +996,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             pass
         else:
             frame.f_locals['__return__'] = return_value
-            debug('--Return--')
-            debug("user_return interaction")
+            self.dbgcom.send_debugmessage('--Return--')
             self.interaction(frame, None)
 
     def cmd_activate_snapshot(self, arg):
