@@ -1,7 +1,6 @@
 import pdb
 import sys
 import linecache
-import bdb
 from reprlib import Repr
 import os
 import os.path
@@ -18,6 +17,7 @@ from epdblib.debug import debug
 #from debug import sendcmd
 import imp
 import epdblib.importer
+import epdblib.basedebugger
 
 from epdblib import dbg
 
@@ -95,9 +95,9 @@ class SnapshotData:
         self.ic = ic
         self.references = 0
 
-class Epdb(pdb.Pdb):
+class Epdb(epdblib.basedebugger.BaseDebugger):
     def __init__(self, com=None, dbgmods=[]):
-        pdb.Pdb.__init__(self, skip=dbg.skipped_modules)
+        epdblib.basedebugger.BaseDebugger.__init__(self, skip=dbg.skipped_modules)
         if not com:
             dbg.dbgcom = self.dbgcom = epdblib.communication.StdDbgCom(self)
         else:
@@ -105,6 +105,41 @@ class Epdb(pdb.Pdb):
             self.dbgcom.set_debugger(self)
             #dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
         self.dbgmods = dbgmods
+        
+        self.aliases = {}
+        self.mainpyfile = ''
+        self._wait_for_mainpyfile = 0
+
+        # Read $HOME/.pdbrc and ./.pdbrc
+        self.rcLines = []
+        #if 'HOME' in os.environ:
+        #    envHome = os.environ['HOME']
+        #    try:
+        #        rcFile = open(os.path.join(envHome, ".pdbrc"))
+        #    except IOError:
+        #        pass
+        #    else:
+        #        for line in rcFile.readlines():
+        #            self.rcLines.append(line)
+        #        rcFile.close()
+        #try:
+        #    rcFile = open(".pdbrc")
+        #except IOError:
+        #    pass
+        #else:
+        #    for line in rcFile.readlines():
+        #        self.rcLines.append(line)
+        #    rcFile.close()
+
+        self.commands = {} # associates a command list to breakpoint numbers
+        self.commands_doprompt = {} # for each bp num, tells if the prompt
+                                    # must be disp. after execing the cmd list
+        self.commands_silent = {} # for each bp num, tells if the stack trace
+                                  # must be disp. after execing the cmd list
+        self.commands_defining = False # True while in the process of defining
+                                       # a command list
+        self.commands_bnum = None # The breakpoint number for which we are
+                                  # defining a list
         self.init_reversible()
 
     def is_skipped_module(self, module_name):
@@ -261,7 +296,7 @@ class Epdb(pdb.Pdb):
                                   "__builtins__": bltins,
                                 })
         
-        # When bdb sets tracing, a number of call and line events happens
+        # When basedebugger sets tracing, a number of call and line events happens
         # BEFORE debugger even reaches user's code (and the exact sequence of
         # events depends on python version). So we take special measures to
         # avoid stopping before we reach the main script (see user_line and
@@ -531,7 +566,7 @@ class Epdb(pdb.Pdb):
         else:
             if self._wait_for_mainpyfile:
                 return
-            debug('Calling usercall interaction', self.running_mode, dbg.mode, self.stopafter)
+            #debug('Calling usercall interaction', self.running_mode, dbg.mode, self.stopafter)
             self.interaction(frame, None)
 
     def stop_here(self, frame):
@@ -1340,6 +1375,35 @@ class Epdb(pdb.Pdb):
         self.dbgcom.get_cmd()
         self.forget()
 
+    def setup(self, f, t):
+        self.forget()
+        self.stack, self.curindex = self.get_stack(f, t)
+        self.curframe = self.stack[self.curindex][0]
+        # The f_locals dictionary is updated from the actual frame
+        # locals whenever the .f_locals accessor is called, so we
+        # cache it here to ensure that modifications are not overwritten.
+        self.curframe_locals = self.curframe.f_locals
+        self.execRcLines()
+
+    def forget(self):
+        self.lineno = None
+        self.stack = []
+        self.curindex = 0
+        self.curframe = None
+
+    # Can be executed earlier than 'setup' if desired
+    def execRcLines(self):
+        if self.rcLines:
+            # Make local copy because of recursion
+            rcLines = self.rcLines
+            # executed only once
+            self.rcLines = []
+            for line in rcLines:
+                line = line[:-1]
+                if len(line) > 0 and line[0] != '#':
+                    self.onecmd(line)
+
+
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
     """Determine which breakpoint for this file:line is to be acted upon.
@@ -1355,7 +1419,7 @@ def effective(file, line, frame):
         b = possibles[i]
         if b.enabled == 0:
             continue
-        if not bdb.checkfuncname(b, frame):
+        if not epdblib.basedebugger.checkfuncname(b, frame):
             continue
         # Count every hit when bp is enabled
         b.hits = b.hits + 1
