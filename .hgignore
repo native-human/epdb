@@ -12,3 +12,6 @@ epdb.komodoproject
 .coverage
 .coverage.*
 tests/htmlcov
+build/
+dist/
+MANIFEST
