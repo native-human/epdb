@@ -61,7 +61,7 @@ class SnapshottingTestCase(unittest.TestCase):
         epdblib.snapshotting.os.fork = fork
         self.mp.set_up_client()
         try:
-            snapshot = self.mp.make_snapshot(0, None)
+            snapshot = self.mp.make_snapshot(0)
         except:
             sys.exit(0)
         self.mp.quit()

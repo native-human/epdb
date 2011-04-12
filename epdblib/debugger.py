@@ -200,26 +200,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         return bestic
 
     def make_snapshot(self):
-        # TODO make snapshot in roff and ron mode
-        #fdebug("make snapshot", dbg.ic, self.snapshot_id)
-        #stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
+        snapshot = self.mp.make_snapshot(dbg.ic)
 
-        #snapshot = epdblib.snapshotting.Snapshot(dbg.ic, self.snapshot_id)
-        snapshot = self.mp.make_snapshot(dbg.ic, self.snapshot_id)
-        self.psnapshot = self.snapshot
-        self.psnapshot_id = self.snapshot_id
-        self.pss_ic = self.ss_ic
-        self.snapshot = snapshot
-        self.snapshot_id = snapshot.id
-        # self.ss_ic = self.ic
-        self.ss_ic = dbg.ic
-
-        snapshotdata = SnapshotData(id=self.snapshot_id, ic=dbg.ic)
+        snapshotdata = SnapshotData(id=snapshot.id, ic=dbg.ic)
         self.snapshots[snapshotdata.id] = snapshotdata
 
         if not snapshot.activated:
             dbg.current_timeline.add(snapshotdata.id)
-
 
         if snapshot.activation_type == "step_forward":
             self.dbgcom.send_debugmessage("step_forward is deprecated. This activation shouldn't be used.")
@@ -239,7 +226,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.running_mode = 'next'
             return 1
         elif snapshot.activation_type == "continue":
-            #debug("Continue activation", dbg.ic)
             self.set_continue()
             #self.set_step()
             self.running_mode = 'continue'
@@ -321,14 +307,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.ron = True
 
         dbg.ic = 0 # Instruction Counter
-
-        self.ss_ic = 0
-        self.snapshot = None
-        self.snapshot_id = None
-
-        self.pss_ic = 0
-        self.psnapshot = None
-        self.psnapshot_id = None
 
         self.running_mode = None
         self.stopafter = -1
@@ -611,18 +589,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.dbgcom.send_debugmessage("Snapshot return: " + str(r) + " ic: " + str(dbg.ic))
         return r
 
-    #def cmd_restore(self, arg):
-    #    """Restore a previous Snapshot, e.g. restore 0"""
-    #    # TODO leave current timeline and go into roff mode
-    #    try:
-    #        id = int(arg)
-    #    except:
-    #         debug('You need to supply an index, e.g. restore 0')
-    #         return
-    #
-    #    self.mp.activatesp(id)
-    #    raise EpdbExit()
-
     def cmd_continued(self, arg):
         continued = dbg.current_timeline.get_continue()
         debug('continued: ', continued)
@@ -752,11 +718,8 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             debug("No snapshot made. Can't step back")
             return
 
-        if s == None:
-            debug("No snapshot made. Can't step back")
-            return
-
         #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
+        self.dbgcom.send_debugmessage("Activate ic {0}".format(dbg.ic))
         self.mp.activateic(s.id, dbg.ic - 1)
         raise EpdbExit()
 

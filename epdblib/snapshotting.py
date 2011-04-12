@@ -29,15 +29,15 @@ class ControllerExit(Exception):
 
 class Snapshot:
     # activated ... if the snaphot was activated or not
-    def __init__(self, ic, psnapshot, sock_name):
+    def __init__(self, ic, sock_name):
         self.ic = ic
-        self.psnapshot = psnapshot
+        #self.psnapshot = psnapshot
         # This is done before forking because of synchronization
         self.cpids = []
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(sock_name)
         self.msging = Messaging(s)
-        self.msging.send('snapshot {0} {1}'.format(self.ic, psnapshot))
+        self.msging.send('snapshot {0}'.format(self.ic))
         msg = self.msging.recv()
         args = msg.split(' ')
         cmd = args[0]
@@ -169,12 +169,11 @@ class Messaging:
     def close(self):
         self.sock.close()
 
-class SavepointConnection:
-    def __init__(self, msging, id, ic, psnapshot):
+class SnapshotConnection:
+    def __init__(self, msging, id, ic):
         self.msging = msging
         self.id = id
         self.ic = ic
-        self.psnapshot = psnapshot
 
     def respond(self):
         cmd = self.msging.recv()
@@ -207,7 +206,7 @@ class MainProcess:
         self.sock_name = SOCK_NAME
         self.sp_sock.bind(self.sock_name)
         self.sp_sock.listen(10)
-        self.savepoint_connections = []
+        self.snapshot_connections = []
         self.do_quit = False
         
         if startserver:
@@ -253,7 +252,7 @@ class MainProcess:
                     words = line.rstrip().split(" ")
                     cmd = str(words[0])
                     if cmd == "end":
-                        for conn in self.savepoint_connections:
+                        for conn in self.snapshot_connections:
                             try:
                                 conn.quit()
                             except:
@@ -265,48 +264,48 @@ class MainProcess:
                     elif cmd == 'showlist':
                         log.debug('ID           InstructionNr    PSnapshot')
                         log.debug('----------------------------')
-                        for s in self.savepoint_connections:
-                            log.debug("{0}    {1}     {2}".format(s.id, s.ic, s.psnapshot))
+                        for s in self.snapshot_connections:
+                            log.debug("{0}    {1}".format(s.id, s.ic))
                         log.debug('Number of snapshots: %d' %
-                                 len(self.savepoint_connections))
+                                 len(self.snapshot_connections))
                         self.controller.send('ok')
                     elif cmd == 'activate': # TODO rename sp (savepoint) to snapshot
                         spid = int(words[1])
                         steps = int(words[2])
-                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections: # TODO rename savepoint connection
                             if s.id == spid:
                                 sp = s
                                 break
-                        sp = self.savepoint_connections[spid]
+                        sp = self.snapshot_connections[spid]
                         sp.activate(steps)
 
                     elif cmd == 'activateic':
                         ssid = int(words[1])
                         ic = int(words[2])
-                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections: # TODO rename savepoint connection
                             if s.id == ssid:
                                 sp = s
                                 break
-                        sp = self.savepoint_connections[ssid]
+                        sp = self.snapshot_connections[ssid]
                         sp.activateic(ic)
 
                     elif cmd == 'activatenext':
                         ssid = int(words[1])
                         nocalls = int(words[2])
-                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections: # TODO rename savepoint connection
                             if s.id == ssid:
                                 ss = s
                                 break
-                        ss = self.savepoint_connections[ssid]
+                        ss = self.snapshot_connections[ssid]
                         ss.activatenext(nocalls)
 
                     elif cmd == 'activatecontinue':
                         ssid = int(words[1])
-                        for s in self.savepoint_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections: # TODO rename savepoint connection
                             if s.id == ssid:
                                 ss = s
                                 break
-                        ss = self.savepoint_connections[ssid]
+                        ss = self.snapshot_connections[ssid]
                         ss.activatecontinue()
                     else:
                         log.debug(cmd)
@@ -319,14 +318,9 @@ class MainProcess:
                     type = msg[0]
                     if type == 'snapshot':
                         arg1 = msg[1]
-                        arg2 = msg[2]
-                        if arg2 == 'None':
-                            psnapshot = None
-                        else:
-                            psnapshot = int(arg2)
                         ic = int(arg1)
-                        sp = SavepointConnection(msging, max_id, ic, psnapshot)
-                        self.savepoint_connections.append(sp)
+                        sp = SnapshotConnection(msging, max_id, ic)
+                        self.snapshot_connections.append(sp)
                         msging.send('ok {0}'.format(max_id))
                         max_id += 1
                         if self.do_quit:
@@ -334,7 +328,7 @@ class MainProcess:
                     else:
                         log.info("Critical Error")
                 else:
-                    for conn in self.savepoint_connections:
+                    for conn in self.snapshot_connections:
                         if fd == conn.msging.sock.fileno():
                             conn.respond()
                             break
@@ -344,8 +338,8 @@ class MainProcess:
                         #sys.exit(0)
                         return
 
-    def make_snapshot(self, ic, psnapshot):
-        return Snapshot(ic, psnapshot, self.sock_name)
+    def make_snapshot(self, ic):
+        return Snapshot(ic, self.sock_name)
 
     def list_snapshots(self):
         """Tell the controller to list all snapshots."""
@@ -380,29 +374,3 @@ class MainProcess:
     def activatecontinue(self, id):
         self.debuggee.send('activatecontinue {0}'.format(id))
         self.debuggee.close()
-#tmp = MainProcess()
-#
-#log.info("line1")
-#log.info("Create Savepoint")
-#sp1 = Savepoint()
-##log.info("Savepoint created")
-#log.info("line2")
-#sp2 = Savepoint()
-#log.info("line3")
-#
-#skip = input('>> Skip Sp Aktivation? ')
-#if skip != 'True':
-#    log.info('>> Activate Sp')
-#    mp.activatesp(sp1.id)
-#log.info('Skipped: "%s"'%skip)
-##mp.list_savepoints()
-#
-#log.info('last')
-#
-##log.info('Show list')
-##mp.list_savepoints()
-#
-#mp.quit()
-#
-#log.info('main quit')
-#sys.exit(0)
