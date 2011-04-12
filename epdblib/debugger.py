@@ -216,7 +216,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             if dbg.ic == dbg.current_timeline.get_max_ic():
                 dbg.mode = 'normal'
             else:
-                dbg.mode = 'redo'
+                dbg.mode = 'replay'
             if snapshot.stop_at_ic == dbg.ic:
                 return 1
             return
@@ -224,12 +224,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.set_next(self.curframe)
             self.stopnocalls = snapshot.nocalls
             self.running_mode = 'next'
+            dbg.mode = 'replay'
             return 1
         elif snapshot.activation_type == "continue":
             self.set_continue()
             #self.set_step()
             self.running_mode = 'continue'
-            dbg.mode = "redo"
+            dbg.mode = "replay"
             return 1
         else:
             # This typically happens if the snapshot is made
@@ -652,7 +653,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def cmd_newtimeline(self, arg):
         """Create a new timeline. This allows changing the program flow from the last run"""
         if arg.strip() == '':
-            debug("You need to supply a name for the new timeline")
+            self.dbgcom.send_debugmessage("You need to supply a name for the new timeline")
             return
         newtimeline = dbg.current_timeline.copy(arg.strip(), dbg.ic)
         dbg.current_timeline.deactivate(dbg.ic)
