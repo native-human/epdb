@@ -98,11 +98,16 @@ class SnapshotData:
 class Epdb(epdblib.basedebugger.BaseDebugger):
     def __init__(self, com=None, dbgmods=[]):
         epdblib.basedebugger.BaseDebugger.__init__(self, skip=dbg.skipped_modules)
+        
+        self.send_preprompt = False # whether the debugger should send time,
+                                    # ic, and mode before giving prompt
+        
         if not com:
             dbg.dbgcom = self.dbgcom = epdblib.communication.StdDbgCom(self)
         else:
             dbg.dbgcom = self.dbgcom = com
             self.dbgcom.set_debugger(self)
+            self.send_preprompt = True
             #dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
         self.dbgmods = dbgmods
         
@@ -245,13 +250,19 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return 'snapshotmade'
 
     def preprompt(self):
+        
         t = time.time()
-        self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
         if self.command_running_start_time:
-            #print("time: t:", t, "self.start_running_time:", self.command_running_start_time)
-            self.dbgcom.send_time(t-self.command_running_start_time)
+            tdiff = t - self.command_running_start_time
         else:
-            self.dbgcom.send_time()
+            tdiff = None
+        if self.send_preprompt:
+            self.dbgcom.send_ic_mode(dbg.ic, dbg.mode)
+            if self.command_running_start_time:
+                #print("time: t:", t, "self.start_running_time:", self.command_running_start_time)
+                self.dbgcom.send_time(tdiff)
+            else:
+                self.dbgcom.send_time()
         self.command_running_start_time = None
 
     def _runscript(self, filename):
