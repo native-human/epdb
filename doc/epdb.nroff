@@ -1,0 +1,14 @@
+.TH epdb
+.SH NAME
+epdb - a reversible debugger for Python
+.SH SYNOPSIS
+.sp
+epdb [\fIfilename\fP]
+.B
+.PP
+.SH DESCRIPTION
+.PP
+epdb - a reversible debugger for Python
+.PP
+.SH BUGS
+A lot.

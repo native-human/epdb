@@ -1,0 +1,7 @@
+#!/usr/bin/python3
+
+# When invoked as main program, invoke the debugger on a script
+if __name__ == '__main__':
+    import epdb
+    #print(epdb, epdb.__dict__)
+    epdb.main()

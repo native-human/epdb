@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 from distutils.core import setup
 
 setup(name='epdb',
@@ -8,6 +7,11 @@ setup(name='epdb',
       author_email='patricksabin@gmx.at',
       url='http://code.google.com/p/epdb/',
       packages=['epdblib'],
-      #scripts=['bin/epdb'],
-      py_modules=['epdb']
+      scripts=['scripts/epdb'],
+      py_modules=['epdb'],
+      classifiers=[
+      'Development Status :: 4 - Beta',
+      'Programming Language :: Python :: 3',
+      'Intended Audience :: Developers',
+      ]
       )
