@@ -110,27 +110,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.mainpyfile = ''
         self._wait_for_mainpyfile = 0
 
-        # Read $HOME/.pdbrc and ./.pdbrc
-        self.rcLines = []
-        #if 'HOME' in os.environ:
-        #    envHome = os.environ['HOME']
-        #    try:
-        #        rcFile = open(os.path.join(envHome, ".pdbrc"))
-        #    except IOError:
-        #        pass
-        #    else:
-        #        for line in rcFile.readlines():
-        #            self.rcLines.append(line)
-        #        rcFile.close()
-        #try:
-        #    rcFile = open(".pdbrc")
-        #except IOError:
-        #    pass
-        #else:
-        #    for line in rcFile.readlines():
-        #        self.rcLines.append(line)
-        #    rcFile.close()
-
         self.commands = {} # associates a command list to breakpoint numbers
         self.commands_doprompt = {} # for each bp num, tells if the prompt
                                     # must be disp. after execing the cmd list
@@ -144,7 +123,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def is_skipped_module(self, module_name):
         """Extend to skip all modules that start with double underscore"""
-        base = super().is_skipped_module(self, module_name)
+        base = super().is_skipped_module(module_name)
         if base == True:
             return True
         #debug("not skipped", module_name)
@@ -1382,26 +1361,12 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         # locals whenever the .f_locals accessor is called, so we
         # cache it here to ensure that modifications are not overwritten.
         self.curframe_locals = self.curframe.f_locals
-        self.execRcLines()
 
     def forget(self):
         self.lineno = None
         self.stack = []
         self.curindex = 0
         self.curframe = None
-
-    # Can be executed earlier than 'setup' if desired
-    def execRcLines(self):
-        if self.rcLines:
-            # Make local copy because of recursion
-            rcLines = self.rcLines
-            # executed only once
-            self.rcLines = []
-            for line in rcLines:
-                line = line[:-1]
-                if len(line) > 0 and line[0] != '#':
-                    self.onecmd(line)
-
 
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
