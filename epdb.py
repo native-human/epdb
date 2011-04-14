@@ -3,7 +3,7 @@ import sys
 import epdblib.debugger
 import pdb
 import os
-from epdblib import debug
+from epdblib.debug import debug
 import bdb
 from epdblib import snapshotting
 import traceback
@@ -15,7 +15,6 @@ from epdblib import dbg
 #def test():
 #    run(TESTCMD)
 
-# print help
 class UsageException(Exception):
     def __init__(self, msg=None):
         self.msg = msg

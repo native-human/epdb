@@ -51,7 +51,7 @@ readconfig()
 
 __pythonimport__ = builtins.__import__
 
-__all__ = ["run", "pm", "Epdb", "runeval", "runctx", "runcall", "set_trace",
+__all__ = ["run", "pm", "Epdb", "runeval", "runcall", "set_trace",
            "post_mortem"]
 
 mode = 'normal'
@@ -98,10 +98,10 @@ class SnapshotData:
 class Epdb(epdblib.basedebugger.BaseDebugger):
     def __init__(self, com=None, dbgmods=[]):
         epdblib.basedebugger.BaseDebugger.__init__(self, skip=dbg.skipped_modules)
-        
+
         self.send_preprompt = False # whether the debugger should send time,
                                     # ic, and mode before giving prompt
-        
+
         if not com:
             dbg.dbgcom = self.dbgcom = epdblib.communication.StdDbgCom(self)
         else:
@@ -110,7 +110,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.send_preprompt = True
             #dbg.dbgcom = self.dbgcom = epdblib.communication.UdsDbgCom(self, uds_file)
         self.dbgmods = dbgmods
-        
+
         self.aliases = {}
         self.mainpyfile = ''
         self._wait_for_mainpyfile = 0
@@ -237,7 +237,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return 'snapshotmade'
 
     def preprompt(self):
-        
+
         t = time.time()
         if self.command_running_start_time:
             tdiff = t - self.command_running_start_time
@@ -272,7 +272,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                                   "__file__"    : filename,
                                   "__builtins__": bltins,
                                 })
-        
+
         # When basedebugger sets tracing, a number of call and line events happens
         # BEFORE debugger even reaches user's code (and the exact sequence of
         # events depends on python version). So we take special measures to
@@ -284,7 +284,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         with open(filename, "rb") as fp:
             statement = "exec(compile(%r, %r, 'exec'))" % \
                         (fp.read(), self.mainpyfile)
-            
+
         self.run(statement, __main__.__dict__)
 
         dbg.ic += 1
@@ -339,10 +339,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         id = stdout_manager.save()
         dbg.current_timeline.get_resource('__stdout__', '')[dbg.ic] = id
 
-    def trace_dispatch(self, frame, event, arg):
-        # debug("trace_dispatch")
-        return pdb.Pdb.trace_dispatch(self, frame, event, arg)
-
     def set_resources(self):
         """Sets the resources for the actual position"""
         #debug("set resources")
@@ -391,6 +387,16 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #print("Skip new module: ", module)
         self.skip.add(module)
 
+    def user_first(self, frame):
+        dbg.ic = 0
+        r = self.make_snapshot()
+        self._wait_for_mainpyfile = 0
+        if r == 'snapshotmade':
+            self.starttime = time.time()
+            return
+        else:
+            pass
+
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
         #debug("user_line:", sys.meta_path, sys.path_hooks)
@@ -398,30 +404,15 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if frame.f_code.co_filename == "<string>":
             #print("skip string")
             return
-        if dbg.skip_modules:
-            do_return = False
-            for m in dbg.skip_modules:
-                self.skip.add(m)
-                print("Added", m)
-                if path_is_module(frame.f_code.co_filename, m):
-                    print("path is module", frame.f_code.co_filename, m)
-                    do_return = True
-                    
-            print(frame.f_code.co_filename, dbg.skip_modules)
-            #if getmodulename(frame.f_code.co_filename) in dbg.skip_modules:
-            dbg.skip_modules.clear()
-            if do_return:
-                return    
 
         if hasattr(self, 'lastframe'):
             del self.lastframe
         self.lastframe = frame
-        #debug('lastframe', self.lastframe.f_globals.get('__name__'))
 
         actualtime = time.time()
         if self.starttime:
             self.runningtime += actualtime - self.starttime
-        #debug("user_line", frame.f_code.co_filename, self.starttime, time.time())
+
         dbg.ic += 1
         try:
             lineno = frame.f_lineno
@@ -429,21 +420,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             lineno = "err"
         #debug("user line: ", dbg.ic, lineno)
         # TODO only make snapshots in normal mode?
-
-        if self._wait_for_mainpyfile:
-            if (self.mainpyfile != self.canonic(frame.f_code.co_filename) or frame.f_lineno<= 0):
-                return
-            dbg.ic = 0
-            r = self.make_snapshot()
-            self._wait_for_mainpyfile = 0
-            if r == 'snapshotmade':
-                #debug("snapshotmade")
-                self.interaction(frame, None)
-                self.starttime = time.time()
-                return
-            else:
-                pass
-                #debug("main snapshot activated")
 
         #debug("Running time", self.runningtime)
         if dbg.snapshottingcontrol.get_make_snapshot():
@@ -517,18 +493,19 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.interaction(frame, None)
         self.starttime = time.time()
 
-    def user_call(self, frame, argument_list):
+    def user_call(self, frame):
         self.call_stack.append(dbg.ic)
         nextd = dbg.current_timeline.get_next()
         self.nocalls += 1
         if not dbg.ic in nextd:
             nextd[dbg.ic] = None
+
+        # TODO clean this code up
         if dbg.mode == 'replay':
             pass
         elif self.running_mode == 'continue':
             pass
         elif self.running_mode == 'next':
-            #self.nocalls += 1
             pass
         elif self.running_mode == 'step':
             pass
@@ -538,14 +515,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             #debug('Calling usercall interaction', self.running_mode, dbg.mode, self.stopafter)
             self.interaction(frame, None)
 
-    def stop_here(self, frame):
-        if pdb.Pdb.stop_here(self, frame):
-            return True
-        return False
-
     def set_continue(self):
         if not self.ron:
-            return pdb.Pdb.set_continue(self)
+            return super().set_continue(self)
         # Debugger overhead needed to count instructions
         self.set_step()
         self.running_mode = 'continue'
@@ -690,12 +662,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 dbg.max_ic = dbg.ic
             self.ron = False
             dbg.current_timeline.deactivate(dbg.ic)
-    #
-    #def interaction(self, frame, traceback):
-    #    # Set all the resources before doing interaction
-    #    self.running_mode = None
-    #    self.set_resources()
-    #    return pdb.Pdb.interaction(self, frame, traceback)
 
     def cmd_rstep(self, arg):
         """Steps one step backwards"""
@@ -977,23 +943,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #self.mp.activatesp(s.id, steps)
         self.mp.activateic(s.id, self.snapshots[sid].ic)
         raise EpdbExit()
-
-    def dispatch_call(self, frame, arg):
-        # XXX 'arg' is no longer used
-        if self.botframe is None:
-            # First call of dispatch since reset()
-            self.botframe = frame.f_back # (CT) Note that this may also be None!
-            return self.trace_dispatch
-
-        #if not (self.stop_here(frame) or self.break_anywhere(frame)):
-        if not self.stop_here(frame) and not self.break_anywhere(frame):
-            # No need to trace this function
-            return # None
-        self.user_call(frame, arg)
-        if self.quitting:
-            raise EpdbExit
-            #raise BdbQuit
-        return self.trace_dispatch
 
     # The following functions are the same as in bdp except for
     # The usage of the epdb Breakpoint implementation
@@ -1401,10 +1350,6 @@ def run(statement, globals=None, locals=None):
 
 def runeval(expression, globals=None, locals=None):
     return Epdb().runeval(expression, globals, locals)
-
-def runctx(statement, globals, locals):
-    # B/W compatibility
-    run(statement, globals, locals)
 
 def runcall(*args, **kwds):
     return Epdb().runcall(*args, **kwds)
