@@ -16,11 +16,13 @@ class Tdb(epdblib.basedebugger.BaseDebugger):
     def __init__(self):
         super().__init__()
         self.calls = 0
-    def user_call(self, frame, args):
+    def user_first(self, frame):
+        pass
+    def user_call(self, frame):
         self.calls += 1
         name = frame.f_code.co_name
         if not name: name = '???'
-        print('+++ call', name, args, self.calls)
+        print('+++ call', name, self.calls)
     def user_line(self, frame):
         import linecache
         name = frame.f_code.co_name

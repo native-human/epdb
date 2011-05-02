@@ -1,6 +1,7 @@
 import sys
 import imp
 import os
+import os.path
 #import time
 
 class EpdbImportFinder:
@@ -14,20 +15,16 @@ class EpdbImportFinder:
     def find_module(self, fullname, path=None):
         #if fullname in ['inspect', 'pkg_resources', 'mimetypes', 'textwrap']:
         #    return None
-        #print("[find_module]", fullname)
         patchfilename = None
         
         subname = fullname.split(".")[-1]
-        #print("[findmodule]", "subname:", subname, "fullname:", fullname, "path:", path)
-        
-        #loaded_spam_modules = [mod for mod in sys.modules.keys() if mod.startswith("spam")]
-        #print("loaded_modules:", loaded_spam_modules)
         
         splitted_name = ["__" + e for e in fullname.split(".")]
         patchmodname = ".".join(splitted_name)
         #print("patchmodname:", patchmodname)
         patchpath = None
         for dbgpath in self.dbgmods:
+            print(os)
             patchpath = os.path.join(os.path.abspath(dbgpath), *splitted_name)
             if os.path.exists(patchpath):
                 #print("pkg_dir found:", patchpath)

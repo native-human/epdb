@@ -5,8 +5,10 @@ import epdblib.snapshotting
 import multiprocessing
 import time
 import epdblib.shareddict
+from epdblib import dbg
 import os
 import atexit
+import tempfile
 
 def server_dummy(dofork=True):
     return
@@ -22,10 +24,15 @@ def fork():
 
 class SnapshottingTestCase(unittest.TestCase):
     def setUp(self):
-        self.mp = epdblib.snapshotting.MainProcess(startserver=False)
-
+        SOCK_DIR = tempfile.mkdtemp(prefix="epdbtest-snap-")
+        sockfile = os.path.join(SOCK_DIR, 'shareddict.sock')
+        self.sockfile = sockfile
+        dbg.shareddict_sock = self.sockfile
+        
         self.sd_process = multiprocessing.Process(target=self.shareddict_server_process, args=())
         self.sd_process.start()
+        
+        self.mp = epdblib.snapshotting.MainProcess(startserver=False)
 
         time.sleep(0.2)
 
@@ -36,7 +43,7 @@ class SnapshottingTestCase(unittest.TestCase):
         self.cov.start()
 
     def shareddict_server_process(self):
-        self.server = epdblib.shareddict.server(dofork=False)
+        self.server = epdblib.shareddict.server(self.sockfile, dofork=False)
 
     def server_process(self):
         self.cov = coverage(data_file=".coverage.snapshotting.server", source=["epdblib"], cover_pylib=True)
@@ -49,6 +56,7 @@ class SnapshottingTestCase(unittest.TestCase):
         self.cov.save()
 
     def tearDown(self):
+        os.unlink(self.sockfile)
         self.sd_process.join()
         self.process.join()
         self.cov.stop()
@@ -57,7 +65,7 @@ class SnapshottingTestCase(unittest.TestCase):
     def test_snapshotting(self):
         if 'epdblib.snapshotting' in sys.modules:
             del sys.modules['epdblib.snapshotting']
-            import epdblib.snapshotting
+        import epdblib.snapshotting
         epdblib.snapshotting.os.fork = fork
         self.mp.set_up_client()
         try:

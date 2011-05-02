@@ -3,6 +3,7 @@
 from epdblib.shareddict import DictProxy
 from epdblib.shareddict import ListProxy
 from epdblib.debug import debug
+from epdblib import dbg
 
 import sys
 
@@ -30,8 +31,8 @@ class Breakpoint:
                 # index 0 is unused, except for marking an
                 # effective break .... see effective()
 
-    bplist = DictProxy('bplist')
-    bpbynumber = ListProxy('bpbynumber')
+    bplist = DictProxy('bplist', sockfile=dbg.shareddict_sock)
+    bpbynumber = ListProxy('bpbynumber', sockfile=dbg.shareddict_sock)
 
     def __init__(self, file, line, temporary=0, cond=None, funcname=None):
         self.funcname = funcname

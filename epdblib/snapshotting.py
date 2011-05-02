@@ -13,9 +13,8 @@ from epdblib import shareddict
 
 tmpfd, tmppath = tempfile.mkstemp(".dbg")
 
-SOCK_DIR = tempfile.mkdtemp()
-
-SOCK_NAME = os.path.join(SOCK_DIR, 'debug')
+SOCK_DIR = tempfile.mkdtemp(prefix="epdb-")
+SOCK_NAME = os.path.join(SOCK_DIR, 'snapshotting.sock')
 #SOCK_NAME = tmppath
 
 class SnapshotExit(Exception):
@@ -215,16 +214,18 @@ class MainProcess:
             if self.pid:
                 self.server()
                 os.waitpid(self.pid,0) # wait for the child process
-                shareddict.shutdown()
+                shareddict.shutdown(dbg.shareddict_sock)
                 sys.exit(0)
             else:
                 self.set_up_client()
 
     def start_shareddict_server(self):
-        sdpid = shareddict.server(dofork=True)
+        sockfile = os.path.join(SOCK_DIR, 'shareddict.sock')
+        dbg.shareddict_sock = sockfile
+        sdpid = shareddict.server(sockfile, dofork=True)
 
     def set_up_client(self):
-        dbg.timelines = shareddict.TimelinesProxy()
+        dbg.timelines = shareddict.TimelinesProxy("timelines", dbg.shareddict_sock)
         dbg.current_timeline = dbg.timelines.new_timeline()
         name = dbg.current_timeline.get_name()
         dbg.timelines.set_current_timeline(name)

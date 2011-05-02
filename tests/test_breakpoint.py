@@ -4,11 +4,11 @@ import unittest
 from io import StringIO
 
 class DictProxyMock(dict):
-    def __init__(self, name):
+    def __init__(self, name, sockfile=None):
         dict.__init__(self)
 
 class ListProxyMock(list):
-    def __init__(self, name):
+    def __init__(self, name, sockfile=None):
         list.__init__(self)
 
 class BreakpointTestCase(CoverageTestCase):

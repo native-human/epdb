@@ -92,5 +92,7 @@ ic = 0
 # modules to skip at next user_line
 skip_modules = set([])
 
+shareddict_sock = None
+
 # The children pids of each (snapshot) process
 cpids = []

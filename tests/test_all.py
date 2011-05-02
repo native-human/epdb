@@ -229,8 +229,13 @@ class Result(unittest.TestResult):
 if __name__ == "__main__":
     testloader = unittest.TestLoader()
     testsuite = testloader.loadTestsFromNames(
-        ["test_opts", "test_import", "test_com", "test_shareddict",
-         "test_snapshotting", "test_debugger", "test_breakpoint",
+        ["test_opts", 
+         "test_import", 
+         "test_com", 
+         "test_shareddict",
+         #"test_snapshotting", 
+         "test_debugger", 
+         "test_breakpoint",
          "test_basedebugger"])
     result = TextTestResult(_WritelnDecorator(sys.stdout), True, 2)
     testsuite.run(result)

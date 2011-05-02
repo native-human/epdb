@@ -330,8 +330,8 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.starttime = None
         self.runningtime = 0
 
-        self.breaks = epdblib.shareddict.DictProxy('breaks')
-        self.snapshots = epdblib.shareddict.DictProxy('snapshots')
+        self.breaks = epdblib.shareddict.DictProxy('breaks', dbg.shareddict_sock)
+        self.snapshots = epdblib.shareddict.DictProxy('snapshots', dbg.shareddict_sock)
 
         dbg.current_timeline.new_resource('__stdout__', '')
         stdout_resource_manager = epdblib.resources.StdoutResourceManager()
@@ -749,7 +749,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         """Stop on the next line in or below the given frame."""
         if not self.ron:
 
-            return pdb.Pdb.set_next(self, frame)
+            return epdblib.basedebugger.BaseDebugger.set_next(self, frame)
         self.set_step()
         self.running_mode = 'next'
         #self.nocalls = 0 # Increased on call - decreased on return
@@ -758,7 +758,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def set_step(self):
         """Stop on the next line in or below the given frame."""
         self.stopnocalls = None
-        return pdb.Pdb.set_step(self)
+        return epdblib.basedebugger.BaseDebugger.set_step(self)
 
     def cmd_step(self, arg):
         if self.is_postmortem:
@@ -766,7 +766,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             #debug("You are at the end of the program. You cant go forward.")
             return
         if not self.ron:
-            return pdb.Pdb.do_step(self, arg)
+            return epdblib.basedebugger.BaseDebugger.do_step(self, arg)
         #debug("Stepping in mode: ", dbg.mode)
         if dbg.mode == 'redo':
             #debug("Stepping in redo mode")
@@ -845,7 +845,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 raise EpdbExit()
         else:
             self.command_running_start_time = time.time()
-            return pdb.Pdb.do_next(self, arg)
+            #epdblib.basedebugger.BaseDebugger.set_next(self,self.curframe)
+            self.set_next(self.curframe)
+            return 1
     do_n = cmd_next
 
     def cmd_continue(self, arg):
@@ -876,13 +878,15 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 raise EpdbExit()
         else:
             self.command_running_start_time = time.time()
-        return pdb.Pdb.do_continue(self, arg)
+        self.set_continue()
+        return 1
+        #return epdblib.basedebugger.BaseDebugger.do_continue(self, arg)
 
     def cmd_return(self, arg):
         debug("Return not implemented yet for epdb")
 
     def set_quit(self):
-        pdb.Pdb.set_quit(self)
+        pdb.epdblib.basedebugger.BaseDebugger.set_quit(self)
 
     def user_return(self, frame, return_value):
         """This function is called when a return trap is set here."""
@@ -1075,6 +1079,30 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return self.breaks[filename]
         else:
             return []
+
+    def lookupmodule(self, filename):
+        """Helper function for break/clear parsing -- may be overridden.
+
+        lookupmodule() translates (possibly incomplete) file or module name
+        into an absolute file name.
+        """
+        if os.path.isabs(filename) and  os.path.exists(filename):
+            return filename
+        f = os.path.join(sys.path[0], filename)
+        if  os.path.exists(f) and self.canonic(f) == self.mainpyfile:
+            return f
+        root, ext = os.path.splitext(filename)
+        if ext == '':
+            filename = filename + '.py'
+        if os.path.isabs(filename):
+            return filename
+        for dirname in sys.path:
+            while os.path.islink(dirname):
+                dirname = os.readlink(dirname)
+            fullname = os.path.join(dirname, filename)
+            if os.path.exists(fullname):
+                return fullname
+        return None
 
     def get_all_breaks(self):
         return self.breaks
@@ -1291,6 +1319,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.stack = []
         self.curindex = 0
         self.curframe = None
+        
+    def defaultFile(self):
+        """Produce a reasonable default."""
+        filename = self.curframe.f_code.co_filename
+        if filename == '<string>' and self.mainpyfile:
+            filename = self.mainpyfile
+        return filename
 
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):
@@ -1307,7 +1342,7 @@ def effective(file, line, frame):
         b = possibles[i]
         if b.enabled == 0:
             continue
-        if not epdblib.basedebugger.checkfuncname(b, frame):
+        if not epdblib.basedebugger.BaseDebugger.checkfuncname(b, frame):
             continue
         # Count every hit when bp is enabled
         b.hits = b.hits + 1
@@ -1344,7 +1379,7 @@ def effective(file, line, frame):
                 # as another hint to user.
                 return (b, 0)
     return (None, None)
-
+    
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)
 

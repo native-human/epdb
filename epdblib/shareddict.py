@@ -14,6 +14,7 @@ import re
 import traceback
 import _thread
 from epdblib.debug import debug
+from epdblib import dbg
 
 def connect(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -39,7 +40,6 @@ class Connection:
     def close(self):
         self.sock.close()
 
-
 def listen(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(address)
@@ -62,9 +62,6 @@ class ServerDict(dict):
         r = ServerDict()
         r.update(self)
         return r
-    #def __setitem__(self, id, value):
-    #    debug("server __setitem__")
-    #    return dict.__setitem__(self, id, value)
 
 class ServerList(list):
     def __iter__(self):
@@ -139,15 +136,6 @@ class ServerTimeline:
                 self._add_by_id(snapshot)
             else:
                 raise Exception("Couldn't add snapshot")
-
-    #def show(self):
-    #    debug("Showing Timeline:", self.name)
-    #    debug("Snapshots: ")
-    #    for e in self.snapshots:
-    #        debug(e, sep=',')
-    #    debug('----')
-    #    debug("maxic:", self.max_ic)
-    #    debug("nextd: ", self.timelines.next_dict[self.name])
 
     def copy(self, name, ic):
         """Creates a copy of the timeline. name is the new name of the timeline
@@ -338,7 +326,7 @@ class ServerTimelines:
         for k in self.timelines.keys():
             debug(self.timelines[k].name)
 
-def server(dofork=False):
+def server(sockfile, dofork=False):
     #nde = ServerDict()
     bplist = ServerDict()   # weird naming, but conforming to bdb
     bpbynumber = ServerList()
@@ -366,11 +354,12 @@ def server(dofork=False):
     timelines = ServerTimelines(snapshots, nde_dict, ude_dict, next_dict,
                                 continue_dict, resources_dict, managers_dict
                                 )
-    try:
-        os.unlink('/tmp/shareddict')
-    except OSError:
-        pass
-    server = listen('/tmp/shareddict')
+    #socketfile = '/tmp/shareddict'
+    #try:
+    #    os.unlink(sockfile)
+    #except OSError:
+    #    pass
+    server = listen(sockfile)
     if dofork:
         sdpid = os.fork() # TODO dofork returns when the server shutdowns?
         if not sdpid:
@@ -491,11 +480,12 @@ def client():
     con.close()
 
 class DictProxy:
-    def __init__(self, objref, conn=None):
+    def __init__(self, objref, sockfile=None, conn=None):
+        if sockfile:
+            self.conn = connect(sockfile)
         if conn:
             self.conn = conn
-        else:
-            self.conn = connect('/tmp/shareddict')
+            
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
@@ -559,11 +549,13 @@ class DictProxy:
         return self._remote_invoke('clear',(), {})
 
 class ListProxy:
-    def __init__(self, objref, conn=None):
+    def __init__(self, objref, sockfile=None, conn=None):
+        if sockfile:
+            self.conn = connect(sockfile)
         if conn:
             self.conn = conn
-        else:
-            self.conn = connect('/tmp/shareddict')
+            
+        self.conn = connect(sockfile)
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
@@ -629,11 +621,11 @@ class ListProxy:
         return self._remote_invoke('sort',(key, reverse), {})
 
 class TimelineProxy:
-    def __init__(self, objref, conn=None):
+    def __init__(self, objref, sockfile=None, conn=None):
+        if sockfile:
+            self.conn = connect(sockfile)
         if conn:
             self.conn = conn
-        else:
-            self.conn = connect('/tmp/shareddict')
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
@@ -743,11 +735,11 @@ class TimelineProxy:
 
 
 class TimelinesProxy:
-    def __init__(self, objref="timelines", conn=None):
+    def __init__(self, objref, sockfile=None, conn=None):
+        if sockfile:
+            self.conn = connect(sockfile)
         if conn:
             self.conn = conn
-        else:
-            self.conn = connect('/tmp/shareddict')
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
@@ -781,15 +773,15 @@ class TimelinesProxy:
     def show(self):
         return self._remote_invoke('show',(), {})
 
-def shutdown():
+def shutdown(sockfile):
     #debug("Shutting down")
-    conn = connect('/tmp/shareddict')
+    conn = connect(sockfile)
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
 
 if __name__ == '__main__':
     server(dofork=True)
-    tls = TimelinesProxy()
+    tls = TimelinesProxy("timelines", dbg.shareddict_sock)
     tl = tls.new_timeline()
     tls.show()
     tl.show()
-    shutdown()
+    shutdown(dbg.shareddict_sock)
