@@ -44,7 +44,7 @@ def orig_open(*args, **kargs):
 # the server
 class StdoutResourceManager:
     def __init__(self, shelvename=None, stdout_cache=None):
-        tempdir = dbg.tempdir
+        tempdir = os.path.join(dbg.tempdir, "stdout_resource")
         if shelvename:
             self.shelvename = shelvename
         else:
@@ -84,7 +84,7 @@ class StdoutResourceManager:
 
 class FileResourceManager:
     def __init__(self, filename):
-        tempdir = dbg.tempdir
+        tempdir = os.path.join(dbg.tempdir, "file_resource")
         shelvename = os.path.join(tempdir,
                 str(base64.b32encode(bytes(filename,'utf-8')),'utf-8')
             )

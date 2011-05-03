@@ -13,6 +13,7 @@ import base64
 import re
 import traceback
 import _thread
+import tempfile
 from epdblib.debug import debug
 from epdblib import dbg
 
@@ -52,6 +53,8 @@ class Listener:
     def accept(self):
         client,address = self.sock.accept()
         return Connection(client, address=address)
+    def close(self):
+        self.sock.close()
 
 class ServerDict(dict):
     def __iter__(self):
@@ -326,8 +329,34 @@ class ServerTimelines:
         for k in self.timelines.keys():
             debug(self.timelines[k].name)
 
-def server(sockfile, dofork=False):
+class ProxyCreator:
+    def __init__(self, sockdir, sockfile='shareddict.sock'):
+        self.sockaddr = os.path.join(sockdir, sockfile)
+    
+    def create_dict(self, objref):
+        conn = connect(self.sockaddr)
+        return DictProxy(objref, conn=conn)
+        
+    def create_timeline(self, objref):
+        conn = connect(self.sockaddr)
+        return TimelineProxy(objref, conn=conn)
+    
+    def create_timelines(self, objref):
+        conn = connect(self.sockaddr)
+        return TimelinesProxy(objref, conn=conn)
+
+    def create_list(self, objref):
+        conn = conn-ect(self.sockaddr)
+        return ListProxy(objref, conn=conn)
+
+
+def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=True):
     #nde = ServerDict()
+    if sockdir == None:
+        socketdirectory = tempfile.mkdtemp(prefix="epdb-shareddict-")
+    else:
+        socketdirectory = sockdir
+    sockaddr = os.path.join(socketdirectory, sockfile)
     bplist = ServerDict()   # weird naming, but conforming to bdb
     bpbynumber = ServerList()
     bpbynumber.append(None)
@@ -359,7 +388,7 @@ def server(sockfile, dofork=False):
     #    os.unlink(sockfile)
     #except OSError:
     #    pass
-    server = listen(sockfile)
+    server = listen(sockaddr)
     if dofork:
         sdpid = os.fork() # TODO dofork returns when the server shutdowns?
         if not sdpid:
@@ -437,6 +466,11 @@ def server(sockfile, dofork=False):
                             elif objref == 'control':
                                 r = None
                                 if method == 'shutdown':
+                                    for c in connectiondict.values():
+                                        if c != conn:
+                                            c.close()
+                                    conn.send(b'done')
+                                    conn.close()
                                     do_quit = True
                         except Exception as e:
                             #debug("Remote Exception")
@@ -452,9 +486,13 @@ def server(sockfile, dofork=False):
                         debug('Server: Unknown event')
                 except socket.error:
                     poll.unregister(fileno)
-    if dofork:
+    server.close()
+    if sockdir == None: # delete tempdir if it was created
+        os.unlink(tempdir)
+    if exitatclose:
         sys.exit(0)
 
+# TODO Fix it don't use /tmp/shareddict
 def client():
     con = connect('/tmp/shareddict')
 
@@ -498,7 +536,8 @@ class DictProxy:
         #lno3 = sys._current_frames()[_thread.get_ident()].f_back.f_lineno
         #debug('Filename: ', fn, lno, fn2, lno2, fn3, lno3)
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
-        t,r = pickle.loads(self.conn.recv())
+        recv = self.conn.recv()
+        t,r = pickle.loads(recv)
         if t == 'RET':
             return r
         elif t == 'EXC':
@@ -547,6 +586,9 @@ class DictProxy:
 
     def clear(self):
         return self._remote_invoke('clear',(), {})
+
+    def close(self):
+        self.conn.close()
 
 class ListProxy:
     def __init__(self, objref, sockfile=None, conn=None):
@@ -619,6 +661,9 @@ class ListProxy:
 
     def sort(self, key=None, reverse=False):
         return self._remote_invoke('sort',(key, reverse), {})
+
+    def close(self):
+        self.sock.close()
 
 class TimelineProxy:
     def __init__(self, objref, sockfile=None, conn=None):
@@ -733,6 +778,8 @@ class TimelineProxy:
     def set_stdout_cache(self, text):
         return self._remote_invoke('set_stdout_cache',(text,), {})
 
+    def close(self):
+        self.sock.close()
 
 class TimelinesProxy:
     def __init__(self, objref, sockfile=None, conn=None):
@@ -773,10 +820,18 @@ class TimelinesProxy:
     def show(self):
         return self._remote_invoke('show',(), {})
 
-def shutdown(sockfile):
-    #debug("Shutting down")
-    conn = connect(sockfile)
+    def close(self):
+        self.conn.close()
+
+def shutdown(sockdir, sockfilename="shareddict.sock"):
+    sockaddr = os.path.join(sockdir, sockfilename)
+    conn = connect(sockaddr)
     conn.send(pickle.dumps(('control', 'shutdown', (), {})))
+    done = conn.recv()
+    if done == b'done':
+        conn.close()
+    else:
+        print("Error", done)
 
 if __name__ == '__main__':
     server(dofork=True)

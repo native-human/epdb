@@ -9,16 +9,16 @@ class ComMock:
         self.called_functions = []
 
 class MainProcessMock:
-    def __init__(self):
-        dbg.timelines = TimelinesProxyMock()
-        dbg.current_timeline = TimelineProxyMock()
+    def __init__(self, tempdir=None):
+        dbg.timelines = TimelinesProxyMock("timelines")
+        dbg.current_timeline = TimelineProxyMock("head")
         name = 'head'
         dbg.timelines.set_current_timeline(name)
         dbg.nde = DictProxyMock('nde.head')
         
 class TimelineProxyMock:
-    def __init__(self):
-        pass
+    def __init__(self, objref):
+        self.objref = objref
    
     def new_resource(self, type, location):
         pass
@@ -34,6 +34,12 @@ class TimelineProxyMock:
     
     def get_next(self):
         return {}
+
+    def get_nde(self):
+        return {}
+        
+    def get_name(self):
+        return self.objref
    
 class ManagerMock:
     def __init__(self):
@@ -43,15 +49,30 @@ class ManagerMock:
         pass
    
 class TimelinesProxyMock:
-    def __init__(self):
+    def __init__(self, objref):
         print("TimelinesProxyMock")
     
     def set_current_timeline(self, name):
         pass
+    
+    def new_timeline(self, name="head", snapshotdict={}):
+        return TimelineProxyMock(name)
 
 class DictProxyMock(dict):
     def __init__(self, objref, conn=None):
         dict.__init__(self)
+        
+class ProxyCreatorMock:
+    def __init__(self, tempdir):
+        pass
+    def create_dict(self, objref):
+        return DictProxyMock(objref)
+    def create_timelines(self, objref):
+        return TimelinesProxyMock(objref)
+    def create_timeline(self, objref):
+        return TimelineProxyMock(objref)
+    def create_list(self, objref):
+        return
 
 class DebuggerTestCase(CoverageTestCase):
     def setUp(self):  
@@ -59,10 +80,10 @@ class DebuggerTestCase(CoverageTestCase):
         import epdblib.snapshotting
         import epdblib.dbg
         epdblib.snapshotting.MainProcess = MainProcessMock
-        epdblib.shareddict.DictProxy = DictProxyMock
+        #epdblib.shareddict.DictProxy = DictProxyMock
+        epdblib.shareddict.ProxyCreator = ProxyCreatorMock
         CoverageTestCase.setUp(self)
         self.epdb = epdblib.debugger.Epdb()
-
 
 class NavigationCmdTestCase(DebuggerTestCase):
     def findnextbreakpointic(self):

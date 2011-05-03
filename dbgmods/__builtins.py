@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-# TODO make this file look more like in the thesis
-
-#import builtins
 import types
 from epdblib import dbg
 from io import SEEK_SET, SEEK_END, SEEK_CUR

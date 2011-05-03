@@ -63,6 +63,7 @@ current_timeline = None
 #stdout_resource_manager = None
 
 # tempdir is the temporary file used by all the processes. tempdir is setted on startup.
+# TODO I think I will not need this
 tempdir = None
 
 # mode can be of 'normal', 'replay', 'redo', 'undo'

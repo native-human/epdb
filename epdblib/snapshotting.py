@@ -11,11 +11,7 @@ from epdblib import debug as log
 from epdblib import dbg
 from epdblib import shareddict
 
-tmpfd, tmppath = tempfile.mkstemp(".dbg")
-
-SOCK_DIR = tempfile.mkdtemp(prefix="epdb-")
-SOCK_NAME = os.path.join(SOCK_DIR, 'snapshotting.sock')
-#SOCK_NAME = tmppath
+import shutil
 
 class SnapshotExit(Exception):
     """Raised when the controller process exits"""
@@ -25,16 +21,15 @@ class ControllerExit(Exception):
     """Raised when the controller process exits"""
     pass
 
-
 class Snapshot:
     # activated ... if the snaphot was activated or not
-    def __init__(self, ic, sock_name):
+    def __init__(self, ic, sockaddr):
         self.ic = ic
         #self.psnapshot = psnapshot
         # This is done before forking because of synchronization
         self.cpids = []
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.connect(sock_name)
+        s.connect(sockaddr)
         self.msging = Messaging(s)
         self.msging.send('snapshot {0}'.format(self.ic))
         msg = self.msging.recv()
@@ -71,6 +66,7 @@ class Snapshot:
                     (pid,status) = os.wait()
                     idx = dbg.cpids.index(pid)
                     del dbg.cpids[idx]
+                self.msging.send('done')
                 raise SnapshotExit()
             if cmd == "run":
                 steps = int(args[1])
@@ -192,40 +188,57 @@ class SnapshotConnection:
 
     def quit(self):
         self.msging.send('close')
+        done = self.msging.recv()
+        if done != 'done':
+            log.debug("Error")
 
 class MainProcess:
     """This class forks the controller process. The controller process ends up
     in a loop. The other process returns with a connection to the controller"""
-    def __init__(self, startserver=True):
+    def __init__(self, proxycreator=None, tempdir=None, sockname='snapshotting.sock', startserver=True):
+        if tempdir is None:
+            dir = tempfile.mkdtemp(prefix="epdb-snap")
+        else:
+            dir = tempdir
+        self.shareddict_created = False
+        self.tempdir = tempdir
+        self.dir = dir
+        self.sockaddr = os.path.join(dir, sockname)
+        self.proxycreator = proxycreator
+        
         debuggee_sock, controller_sock = socket.socketpair()
         debuggee = Messaging(debuggee_sock)
         self.debuggee = debuggee
         self.controller = Messaging(controller_sock)
         self.sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock_name = SOCK_NAME
-        self.sp_sock.bind(self.sock_name)
+        self.sp_sock.bind(self.sockaddr)
         self.sp_sock.listen(10)
         self.snapshot_connections = []
         self.do_quit = False
+        self.snapshot_class = Snapshot
         
         if startserver:
-            self.start_shareddict_server()
+            if not self.proxycreator:
+                self.start_shareddict_server()
+                self.shareddict_created = True
+                self.proxycreator = shareddict.ProxyCreator(self.dir)
             self.pid = os.fork()
             if self.pid:
                 self.server()
                 os.waitpid(self.pid,0) # wait for the child process
-                shareddict.shutdown(dbg.shareddict_sock)
                 sys.exit(0)
             else:
                 self.set_up_client()
 
     def start_shareddict_server(self):
-        sockfile = os.path.join(SOCK_DIR, 'shareddict.sock')
-        dbg.shareddict_sock = sockfile
-        sdpid = shareddict.server(sockfile, dofork=True)
+        #sockfile = os.path.join(SOCK_DIR, 'shareddict.sock')
+        #dbg.shareddict_sock = sockfile
+        sdpid = shareddict.server(self.dir, dofork=True)
 
     def set_up_client(self):
-        dbg.timelines = shareddict.TimelinesProxy("timelines", dbg.shareddict_sock)
+        from epdblib import dbg
+        #dbg.timelines = shareddict.TimelinesProxy("timelines", dbg.shareddict_sock)
+        dbg.timelines = self.proxycreator.create_timelines("timelines")
         dbg.current_timeline = dbg.timelines.new_timeline()
         name = dbg.current_timeline.get_name()
         dbg.timelines.set_current_timeline(name)
@@ -240,7 +253,7 @@ class MainProcess:
             list = p.poll(100)
             if list == []:
                 if self.do_quit:
-                    os.unlink(self.sock_name)
+                    self.clear_tmp_file()
                     return
                     #sys.exit(0)
             for event in list:
@@ -257,7 +270,13 @@ class MainProcess:
                             try:
                                 conn.quit()
                             except:
-                                log.debug("Warning: Shuting down of Savepoint failed")
+                                import traceback
+                                log.debug("Warning: Shutting down of Snapshot failed")
+                                exctype,exc,tb = sys.exc_info()
+                                print(exctype, exc)
+                                #print("Exception:", exc.message)
+                                traceback.print_tb(tb)
+                        self.controller.send("done")
                         self.do_quit = True
                     elif cmd == 'connect':
                         arg = words[1]
@@ -270,30 +289,30 @@ class MainProcess:
                         log.debug('Number of snapshots: %d' %
                                  len(self.snapshot_connections))
                         self.controller.send('ok')
-                    elif cmd == 'activate': # TODO rename sp (savepoint) to snapshot
-                        spid = int(words[1])
+                    elif cmd == 'activate':
+                        ssid = int(words[1])
                         steps = int(words[2])
-                        for s in self.snapshot_connections: # TODO rename savepoint connection
-                            if s.id == spid:
-                                sp = s
+                        for s in self.snapshot_connections:
+                            if s.id == ssid:
+                                ss = s
                                 break
-                        sp = self.snapshot_connections[spid]
-                        sp.activate(steps)
+                        ss = self.snapshot_connections[ssid]
+                        ss.activate(steps)
 
                     elif cmd == 'activateic':
                         ssid = int(words[1])
                         ic = int(words[2])
-                        for s in self.snapshot_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections:
                             if s.id == ssid:
-                                sp = s
+                                ss = s
                                 break
-                        sp = self.snapshot_connections[ssid]
-                        sp.activateic(ic)
+                        ss = self.snapshot_connections[ssid]
+                        ss.activateic(ic)
 
                     elif cmd == 'activatenext':
                         ssid = int(words[1])
                         nocalls = int(words[2])
-                        for s in self.snapshot_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections:
                             if s.id == ssid:
                                 ss = s
                                 break
@@ -302,7 +321,7 @@ class MainProcess:
 
                     elif cmd == 'activatecontinue':
                         ssid = int(words[1])
-                        for s in self.snapshot_connections: # TODO rename savepoint connection
+                        for s in self.snapshot_connections:
                             if s.id == ssid:
                                 ss = s
                                 break
@@ -312,7 +331,7 @@ class MainProcess:
                         log.debug(cmd)
 
                 # New Savepoint/Debuggee Connection
-                elif fd == self.sp_sock.fileno():
+                elif fd == self.sp_sock.fileno(): 
                     conn, addr = self.sp_sock.accept()
                     msging = Messaging(conn)
                     msg = msging.recv().split()
@@ -320,7 +339,7 @@ class MainProcess:
                     if type == 'snapshot':
                         arg1 = msg[1]
                         ic = int(arg1)
-                        sp = SnapshotConnection(msging, max_id, ic)
+                        sp = SnapshotConnection(msging, max_id, ic) # TODO rename sp
                         self.snapshot_connections.append(sp)
                         msging.send('ok {0}'.format(max_id))
                         max_id += 1
@@ -335,13 +354,21 @@ class MainProcess:
                             break
                     else:
                         log.info('Unknown fd: %s' % fd)
-                        os.unlink(self.sock_name)
+                        self.clear_tmp_file()
                         #sys.exit(0)
                         return
 
-    def make_snapshot(self, ic):
-        return Snapshot(ic, self.sock_name)
+    def clear_tmp_file(self):
+        """Clear temporary file if the MainProcess has created it, otherwise
+        let the callee delete it."""
+        if self.tempdir is None:
+            shutil.rmtree(self.dir)    
 
+    def make_snapshot(self, ic):
+        #print(Snapshot, self)
+        return Snapshot(ic, self.sockaddr)
+        #return self.snapshot_class(ic, self.sockaddr)
+        
     def list_snapshots(self):
         """Tell the controller to list all snapshots."""
         #log.debug("Send List Savepoints")
@@ -354,8 +381,13 @@ class MainProcess:
     def quit(self):
         try:
             self.debuggee.send('end')
+            done = self.debuggee.recv()
+            if done != 'done':
+                log.debug("Something went wrong during shutdown")
         except:
             log.debug("Warning shutting down of snapshot server failed")
+        if self.shareddict_created:
+            shareddict.shutdown(self.dir)
 
     def activatesp(self, id, steps=-1): # TODO rename to snapshot
         #log.info('activate {0} {1}'.format(id,steps))

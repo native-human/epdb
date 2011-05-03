@@ -18,6 +18,7 @@ from epdblib.debug import debug
 import imp
 import epdblib.importer
 import epdblib.basedebugger
+import shutil
 
 from epdblib import dbg
 
@@ -289,6 +290,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
         dbg.ic += 1
         if self._user_requested_quit:
+            self.cleanup()
             return
         self.dbgcom.send_program_finished()
         #debug("Program has finished")
@@ -303,8 +305,11 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.lastline = ''
         self.command_running_start_time = None
         #debug('Init reversible')
-        dbg.tempdir = tempfile.mkdtemp()
-        self.mp = epdblib.snapshotting.MainProcess()
+        dbg.tempdir = tempfile.mkdtemp(prefix="epdb")
+        os.mkdir(os.path.join(dbg.tempdir, 'stdout_resource'))
+        os.mkdir(os.path.join(dbg.tempdir, 'file_resource'))
+        self.mp = epdblib.snapshotting.MainProcess(tempdir=dbg.tempdir)
+        self.proxycreator = epdblib.shareddict.ProxyCreator(dbg.tempdir)
         self.ron = True
 
         dbg.ic = 0 # Instruction Counter
@@ -330,8 +335,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.starttime = None
         self.runningtime = 0
 
-        self.breaks = epdblib.shareddict.DictProxy('breaks', dbg.shareddict_sock)
-        self.snapshots = epdblib.shareddict.DictProxy('snapshots', dbg.shareddict_sock)
+        #self.breaks = epdblib.shareddict.DictProxy('breaks', dbg.shareddict_sock)
+        #self.snapshots = epdblib.shareddict.DictProxy('snapshots', dbg.shareddict_sock)
+        self.breaks = self.proxycreator.create_dict("breaks")
+        self.snapshots = self.proxycreator.create_dict("snapshots")
 
         dbg.current_timeline.new_resource('__stdout__', '')
         stdout_resource_manager = epdblib.resources.StdoutResourceManager()
@@ -639,7 +646,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def cmd_quit(self):
         self._user_requested_quit = 1
-        self.mp.quit()
         self.set_quit()
         return 1
 
@@ -886,7 +892,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         debug("Return not implemented yet for epdb")
 
     def set_quit(self):
-        pdb.epdblib.basedebugger.BaseDebugger.set_quit(self)
+        epdblib.basedebugger.BaseDebugger.set_quit(self)
 
     def user_return(self, frame, return_value):
         """This function is called when a return trap is set here."""
@@ -1326,6 +1332,11 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if filename == '<string>' and self.mainpyfile:
             filename = self.mainpyfile
         return filename
+    
+    def cleanup(self):
+        self.mp.quit()
+        shutil.rmtree(dbg.tempdir)
+        
 
 # copied from pdb to make use of epdb's breakpoint implementation
 def effective(file, line, frame):

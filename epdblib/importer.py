@@ -24,7 +24,7 @@ class EpdbImportFinder:
         #print("patchmodname:", patchmodname)
         patchpath = None
         for dbgpath in self.dbgmods:
-            print(os)
+            #print(os)
             patchpath = os.path.join(os.path.abspath(dbgpath), *splitted_name)
             if os.path.exists(patchpath):
                 #print("pkg_dir found:", patchpath)
