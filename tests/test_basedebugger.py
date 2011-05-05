@@ -46,7 +46,15 @@ class BaseDebuggerTestCase(unittest.TestCase):
         code = [
             "import epdblib.basedebugger",
             #"import couchdb",
-            "foo(10)"
+            "def bar(a):",
+            "    print('bar(', a, ')')",
+            "    return a/2",
+            "",
+            "def foo(n):",
+            "    print('foo(', n, ')')",
+            "    x = bar(n*10)",
+            "    print('bar returned', x)",
+            "foo(10)",
         ]
         code = "\n".join(code)
         t = Tdb()

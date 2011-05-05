@@ -346,7 +346,7 @@ class ProxyCreator:
         return TimelinesProxy(objref, conn=conn)
 
     def create_list(self, objref):
-        conn = conn-ect(self.sockaddr)
+        conn = connect(self.sockaddr)
         return ListProxy(objref, conn=conn)
 
 
@@ -596,8 +596,7 @@ class ListProxy:
             self.conn = connect(sockfile)
         if conn:
             self.conn = conn
-            
-        self.conn = connect(sockfile)
+
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
@@ -636,7 +635,6 @@ class ListProxy:
 
     def append(self, object):
         return self._remote_invoke('append',(object,), {})
-
 
     def count(self, value):
         return self._remote_invoke('count',(value,), {})

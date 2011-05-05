@@ -12,6 +12,7 @@ from epdblib import dbg
 from epdblib import shareddict
 
 import shutil
+import time
 
 class SnapshotExit(Exception):
     """Raised when the controller process exits"""
@@ -62,11 +63,23 @@ class Snapshot:
             args = msg.split()
             cmd = args[0]
             if cmd == "close":
+                mainpid = int(args[1])
+                log.debug("close got")
+                log.debug("wait for pids", dbg.cpids)
+                
+                if mainpid in dbg.cpids: # The main pid will be closed after
+                                        # after the quit confirmation
+                    dbg.cpids.remove(mainpid)
+                    mainpids = [mainpid]
+                else:
+                    mainpids = []
                 while dbg.cpids != []:
                     (pid,status) = os.wait()
                     idx = dbg.cpids.index(pid)
                     del dbg.cpids[idx]
-                self.msging.send('done')
+                self.msging.send('quitdone')
+                time.sleep(10)
+                log.debug("Snapshot exit received")
                 raise SnapshotExit()
             if cmd == "run":
                 steps = int(args[1])
@@ -124,18 +137,21 @@ class Snapshot:
                     dbg.nde = dbg.current_timeline.get_nde()
                     #dbg.undod = dbg.current_timeline.get_ude()
                     break
+
 class Messaging:
     """This is wrapper around sockets, which allow to send and receive fixed
     length messages"""
     def __init__(self, sock=None):
         self.MSG_LEN = 30
         if sock is None:
-            self.sock = socket.socket(
-                socket.AF_INET, socket.SOCK_STREAM)
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.sock = sock
+        self.recv_msg = b''
+
     def connect(self,host, port):
         self.sock.connect((host, port))
+        
     def send(self, msg):
         if hasattr(msg, 'encode'):
             msg = msg.encode('ascii')
@@ -156,11 +172,25 @@ class Messaging:
         msg = b''
         while len(msg) < self.MSG_LEN:
             chunk = self.sock.recv(self.MSG_LEN-len(msg))
-            if chunk == '':
+            if chunk == b'':
                 raise RuntimeError("socket connection broken")
             msg = msg + chunk
         msg = msg.decode('ascii')
         return msg.rstrip()
+
+    def recv_async(self):
+        msg = b''
+        while len(msg) < self.MSG_LEN:
+            try:
+                chunk = self.sock.recv(self.MSG_LEN-len(msg), socket.MSG_DONTWAIT)
+            except socket.error:
+                return None
+            if chunk == b'':
+                raise RuntimeError("socket connection broken")
+            msg = msg + chunk
+        msg = msg.decode('ascii')
+        return msg.rstrip()
+
     def close(self):
         self.sock.close()
 
@@ -169,6 +199,11 @@ class SnapshotConnection:
         self.msging = msging
         self.id = id
         self.ic = ic
+        
+        self.quitted = False
+
+    def fileno(self):
+        return self.msging.sock.fileno()
 
     def respond(self):
         cmd = self.msging.recv()
@@ -188,9 +223,35 @@ class SnapshotConnection:
 
     def quit(self):
         self.msging.send('close')
+        log.debug("close sent")
         done = self.msging.recv()
+        log.debug("close done")
         if done != 'done':
             log.debug("Error")
+            
+    def send_quit(self, mainpid):
+        self.msging.send('close ' + str(mainpid))
+       # self.quitted = False
+    
+    def recv_quitdone(self):
+        #try:
+        msg = self.msging.recv()
+        #except:
+        #    log.debug("Broken connection. Assume Quit")
+        #    self.quitted = True
+        if msg == 'quitdone':
+            log.debug("Quit done received")
+            self.quitted = True
+        else:
+            log.debug("received: " + repr(msg))
+    
+    #def quitted(self):
+    #    if self.quitted:
+    #        return True
+    #    done = self.msging.recv()
+    #    log.debug("close done")
+    #    if done != 'done':
+    #        log.debug("Error")
 
 class MainProcess:
     """This class forks the controller process. The controller process ends up
@@ -209,7 +270,7 @@ class MainProcess:
         debuggee_sock, controller_sock = socket.socketpair()
         debuggee = Messaging(debuggee_sock)
         self.debuggee = debuggee
-        self.controller = Messaging(controller_sock)
+        self.controller = Messaging(controller_sock) # TODO rename sp_sock
         self.sp_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sp_sock.bind(self.sockaddr)
         self.sp_sock.listen(10)
@@ -249,26 +310,39 @@ class MainProcess:
         p = select.poll()
         p.register(self.controller.sock, select.POLLIN|select.POLLPRI)
         p.register(self.sp_sock, select.POLLIN|select.POLLPRI)
+        quitrecvinitiated = False
         while True:
-            list = p.poll(100)
+            list = p.poll(200)
             if list == []:
                 if self.do_quit:
-                    self.clear_tmp_file()
-                    return
-                    #sys.exit(0)
-            for event in list:
-                fd, ev = event
-
+                    #log.debug("not quitted " + str(notquitted))
+                    if not quitrecvinitiated:
+                        for sc in self.snapshot_connections:
+                            log.debug("register " + str(sc.fileno()))
+                            p.register(sc.fileno(), select.POLLIN|select.POLLPRI)
+                        quitrecvinitiated = True
+                    notquitted = [s.quitted for s in self.snapshot_connections if s.quitted == False]
+                    if notquitted == []:
+                        log.debug("All snapshots quitted")
+                        self.controller.send("done")
+                        self.clear_tmp_file()
+                        return
+                        #sys.exit(0)
+            for fd, ev in list:
                 # Controller Code
-
+                log.debug(str(fd), str([s.fileno() for s in self.snapshot_connections]))
                 if fd == self.controller.sock.fileno():
                     line = self.controller.recv()
                     words = line.rstrip().split(" ")
                     cmd = str(words[0])
                     if cmd == "end":
-                        for conn in self.snapshot_connections:
+                        mainpid = int(words[1])
+                        log.debug("end received")
+                        notquitted = [s.quitted for s in self.snapshot_connections if s.quitted == False]
+                        log.debug("initial not quitted" + str(notquitted))
+                        for i,conn in enumerate(self.snapshot_connections):
                             try:
-                                conn.quit()
+                                conn.send_quit(mainpid)
                             except:
                                 import traceback
                                 log.debug("Warning: Shutting down of Snapshot failed")
@@ -276,7 +350,6 @@ class MainProcess:
                                 print(exctype, exc)
                                 #print("Exception:", exc.message)
                                 traceback.print_tb(tb)
-                        self.controller.send("done")
                         self.do_quit = True
                     elif cmd == 'connect':
                         arg = words[1]
@@ -339,14 +412,22 @@ class MainProcess:
                     if type == 'snapshot':
                         arg1 = msg[1]
                         ic = int(arg1)
-                        sp = SnapshotConnection(msging, max_id, ic) # TODO rename sp
-                        self.snapshot_connections.append(sp)
+                        ss = SnapshotConnection(msging, max_id, ic)
+                        self.snapshot_connections.append(ss)
                         msging.send('ok {0}'.format(max_id))
                         max_id += 1
                         if self.do_quit:
-                            sp.quit()
+                            ss.send_quit()
                     else:
                         log.info("Critical Error")
+                
+                # Message from snapshot
+                elif fd in [s.fileno() for s in self.snapshot_connections]:
+                    ss_conn = [s for s in self.snapshot_connections if fd == s.fileno()][0]
+                    log.debug("before quitdone"+str([s.quitted for s in self.snapshot_connections]))
+                    ss_conn.recv_quitdone()
+                    log.debug("after quitdone"+str([s.quitted for s in self.snapshot_connections]))
+                    log.debug("Something received ")
                 else:
                     for conn in self.snapshot_connections:
                         if fd == conn.msging.sock.fileno():
@@ -379,15 +460,20 @@ class MainProcess:
             raise Exception()
 
     def quit(self):
+        log.debug("pid: ", os.getpid())
         try:
-            self.debuggee.send('end')
+            self.debuggee.send('end '+str(os.getpid()))
+            log.debug("sended end")
             done = self.debuggee.recv()
+            log.debug("received done")
             if done != 'done':
                 log.debug("Something went wrong during shutdown")
         except:
             log.debug("Warning shutting down of snapshot server failed")
         if self.shareddict_created:
+            log.debug("shut shared dict down")
             shareddict.shutdown(self.dir)
+            log.debug("shared dict shutted down")
 
     def activatesp(self, id, steps=-1): # TODO rename to snapshot
         #log.info('activate {0} {1}'.format(id,steps))

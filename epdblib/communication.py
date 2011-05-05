@@ -520,6 +520,9 @@ class StdDbgCom(epdblib.asyncmd.Asyncmd):
     def send_debugmessage(self, message):
         self.send_raw("debug: " + message)
 
+    def send_clear_success(self, number):
+        self.send_raw("clear breakpoint" + str(number)+ "\r\n")
+
     def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
         output = io.StringIO()
         print(value, *args, sep=sep, end=end, file=output)

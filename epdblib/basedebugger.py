@@ -3,6 +3,7 @@ import fnmatch
 import sys
 import os
 import types
+from epdblib import breakpoint
 
 class BaseDebuggerQuit(Exception):
     """Exception to quit the debugger"""
@@ -183,8 +184,10 @@ class Tracer:
 
 class BaseDebugger(Tracer):
     def __init__(self, skip=None):
-        super().__init__(skip)
-        self.breaks = {}
+        super().__init__(skip) # TODO delegetion is probably better than template
+                               # method here
+        self.bpmanager = breakpoint.LocalBreakpointManager()
+        #self.breaks = {}
         self.fncache = {}
 
     def canonic(self, filename):
@@ -199,22 +202,22 @@ class BaseDebugger(Tracer):
 
     def break_here(self, frame):
         filename = self.canonic(frame.f_code.co_filename)
-        if not filename in self.breaks:
+        if not self.bpmanager.file_has_breaks(filename):
             return False
         lineno = frame.f_lineno
-        if not lineno in self.breaks[filename]:
+        if not self.bpmanager.bp_exists(filename, lineno):
             # The line itself has no breakpoint, but maybe the line is the
             # first line of a function with breakpoint set by function name.
             lineno = frame.f_code.co_firstlineno
-            if not lineno in self.breaks[filename]:
+            if not self.bpmanager.bp_exists(filename, lineno):
                 return False
-
+    
         # flag says ok to delete temp. bp
-        (bp, flag) = effective(filename, lineno, frame)
+        (bp, flag) = self.bpmanager.effective(filename, lineno, frame)
         if bp:
             self.currentbp = bp.number
             if (flag and bp.temporary):
-                self.do_clear(str(bp.number))
+                self.do_clear(str(bp.number)) # TODO this looks suspicous, does do_clear exist?
             return True
         else:
             return False
@@ -248,7 +251,7 @@ class BaseDebugger(Tracer):
     def set_continue(self):
         # Don't stop except at breakpoints or when finished
         self._set_stopinfo(self.botframe, None)
-        if not self.breaks:
+        if not self.bpmanager.any_break_exists():
             # no breakpoints; run without debugger overhead
             sys.settrace(None)
             frame = sys._getframe().f_back
@@ -272,28 +275,11 @@ class BaseDebugger(Tracer):
         if not line:
             return 'Line %s:%d does not exist' % (filename,
                                    lineno)
-        if not filename in self.breaks:
-            self.breaks[filename] = []
-        list = self.breaks[filename]
-        if not lineno in list:
-            list.append(lineno)
-        bp = Breakpoint(filename, lineno, temporary, cond, funcname)
+        self.bpmanager.new_breakpoint(filename, lineno, temporary, cond, funcname)
 
     def clear_break(self, filename, lineno):
         filename = self.canonic(filename)
-        if not filename in self.breaks:
-            return 'There are no breakpoints in %s' % filename
-        if lineno not in self.breaks[filename]:
-            return 'There is no breakpoint at %s:%d' % (filename,
-                                    lineno)
-        # If there's only one bp in the list for that file,line
-        # pair, then remove the breaks entry
-        for bp in Breakpoint.bplist[filename, lineno][:]:
-            bp.deleteMe()
-        if (filename, lineno) not in Breakpoint.bplist:
-            self.breaks[filename].remove(lineno)
-        if not self.breaks[filename]:
-            del self.breaks[filename]
+        self.bpmanager.clear_break(filename, lineno)
 
     def clear_bpbynumber(self, arg):
         try:
@@ -301,51 +287,45 @@ class BaseDebugger(Tracer):
         except:
             return 'Non-numeric breakpoint number (%s)' % arg
         try:
-            bp = Breakpoint.bpbynumber[number]
+            bp = self.bpmanager.breakpoint_by_number(number)
         except IndexError:
             return 'Breakpoint number (%d) out of range' % number
         if not bp:
             return 'Breakpoint (%d) already deleted' % number
-        self.clear_break(bp.file, bp.line)
+        self.bpmanager.clear_break(bp.file, bp.line)
 
     def clear_all_file_breaks(self, filename):
         filename = self.canonic(filename)
-        if not filename in self.breaks:
+        if not self.bpmanager.file_has_breaks():
             return 'There are no breakpoints in %s' % filename
-        for line in self.breaks[filename]:
-            blist = Breakpoint.bplist[filename, line]
-            for bp in blist:
-                bp.deleteMe()
-        del self.breaks[filename]
+        self.bpmanager.clear_all_file_breaks(filename)
+        #for line in self.breaks[filename]:
+        #    blist = Breakpoint.bplist[filename, line]
+        #    for bp in blist:
+        #        bp.deleteMe()
+        #del self.breaks[filename]
 
     def clear_all_breaks(self):
-        if not self.breaks:
+        if not self.bpmanager.any_break_exists():
             return 'There are no breakpoints'
-        for bp in Breakpoint.bpbynumber:
-            if bp:
-                bp.deleteMe()
-        self.breaks = {}
+        self.bpmanager.clear_all_breaks()
 
-    def get_break(self, filename, lineno):
-        filename = self.canonic(filename)
-        return filename in self.breaks and \
-            lineno in self.breaks[filename]
+    # I believe I don't need this
+    #def get_break(self, filename, lineno):
+    #    filename = self.canonic(filename)
+    #    
+    #    return self.bpmanager.get_break(filename, lineno)
 
     def get_breaks(self, filename, lineno):
         filename = self.canonic(filename)
-        return filename in self.breaks and \
-            lineno in self.breaks[filename] and \
-            Breakpoint.bplist[filename, lineno] or []
-
+        return self.bpmanager.get_breaks(filename, lineno)
+        
     def get_file_breaks(self, filename):
         filename = self.canonic(filename)
-        if filename in self.breaks:
-            return self.breaks[filename]
-        else:
-            return []
+        self.bpmanager.get_file_breaks()
 
     def get_all_breaks(self):
-        return self.breaks
+        return self.bpmanager.get_all_breaks()
 
     # Derived classes and clients can call the following method
     # to get a data structure representing a stack trace.
@@ -393,56 +373,3 @@ class BaseDebugger(Tracer):
         line = linecache.getline(filename, lineno, frame.f_globals)
         if line: s = s + lprefix + line.strip()
         return s
-
-# Determines if there is an effective (active) breakpoint at this
-# line of code.  Returns breakpoint number or 0 if none
-def effective(file, line, frame):
-    """Determine which breakpoint for this file:line is to be acted upon.
-
-    Called only if we know there is a bpt at this
-    location.  Returns breakpoint that was triggered and a flag
-    that indicates if it is ok to delete a temporary bp.
-
-    """
-    possibles = Breakpoint.bplist[file,line]
-    for i in range(0, len(possibles)):
-        b = possibles[i]
-        if b.enabled == 0:
-            continue
-        if not checkfuncname(b, frame):
-            continue
-        # Count every hit when bp is enabled
-        b.hits = b.hits + 1
-        if not b.cond:
-            # If unconditional, and ignoring,
-            # go on to next, else break
-            if b.ignore > 0:
-                b.ignore = b.ignore -1
-                continue
-            else:
-                # breakpoint and marker that's ok
-                # to delete if temporary
-                return (b,1)
-        else:
-            # Conditional bp.
-            # Ignore count applies only to those bpt hits where the
-            # condition evaluates to true.
-            try:
-                val = eval(b.cond, frame.f_globals,
-                       frame.f_locals)
-                if val:
-                    if b.ignore > 0:
-                        b.ignore = b.ignore -1
-                        # continue
-                    else:
-                        return (b,1)
-                # else:
-                #   continue
-            except:
-                # if eval fails, most conservative
-                # thing is to stop on breakpoint
-                # regardless of ignore count.
-                # Don't delete temporary,
-                # as another hint to user.
-                return (b,0)
-    return (None, None)

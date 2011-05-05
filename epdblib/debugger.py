@@ -19,6 +19,7 @@ import imp
 import epdblib.importer
 import epdblib.basedebugger
 import shutil
+import epdblib.breakpoint
 
 from epdblib import dbg
 
@@ -154,52 +155,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     bestsnapshot = e
         return bestsnapshot
 
-    def findnextbreakpointic(self):
-        """Looks for the next ic that has a breakpoint. It only looks at executed
-        instruction counts. Returns -1 if nothing was found"""
-        continued = dbg.current_timeline.get_continue()
-        from epdblib.breakpoint import Breakpoint
-        bestic = -1
-        for bp in Breakpoint.bplist:
-            #debug("Checking Bp: ", bp)
-            try:
-                for bpic in continued[bp]:
-                    #debug("Try bpic", bpic)
-                    if bpic > dbg.ic:
-                        break
-                else:
-                    continue
-                if bestic == -1:
-                    bestic = bpic
-                else:
-                    bestic = min(bestic, bpic)
-            except KeyError:
-                pass
-        return bestic
-
-    def findprecedingbreakpointic(self):
-        """Looks for a preceding ic that has a breakpoint. It only looks at executed
-        instruction counts. Returns 0 if nothing was found"""
-        continued = dbg.current_timeline.get_continue()
-        from epdblib.breakpoint import Breakpoint
-        bestic = 0
-        for bp in Breakpoint.bplist:
-            #debug("Checking Bp: ", bp)
-            try:
-                for bpic in reversed(continued[bp]):
-                    #debug("Try bpic")
-                    if bpic < dbg.ic:
-                        break
-                else:
-                    continue
-                if bestic == -1:
-                    bestic = bpic
-                else:
-                    bestic = max(bestic, bpic)
-            except KeyError:
-                pass
-        return bestic
-
     def make_snapshot(self):
         snapshot = self.mp.make_snapshot(dbg.ic)
 
@@ -310,6 +265,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         os.mkdir(os.path.join(dbg.tempdir, 'file_resource'))
         self.mp = epdblib.snapshotting.MainProcess(tempdir=dbg.tempdir)
         self.proxycreator = epdblib.shareddict.ProxyCreator(dbg.tempdir)
+        self.bpmanager = epdblib.breakpoint.BreakpointManager(self.proxycreator)
         self.ron = True
 
         dbg.ic = 0 # Instruction Counter
@@ -408,6 +364,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         """This function is called when we stop or break at this line."""
         #debug("user_line:", sys.meta_path, sys.path_hooks)
         #debug("user_line", frame.f_code.co_filename, frame.f_lineno)
+        self.dbgcom.send_debugmessage("userline: {} {}".format(frame.f_code.co_filename, frame.f_lineno))
         if frame.f_code.co_filename == "<string>":
             #print("skip string")
             return
@@ -525,6 +482,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def set_continue(self):
         if not self.ron:
             return super().set_continue(self)
+            print("roff continue")
         # Debugger overhead needed to count instructions
         self.set_step()
         self.running_mode = 'continue'
@@ -714,7 +672,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return
 
         nextic = self.rnext_ic.get(dbg.ic, dbg.ic-1)
-        bpic = self.findprecedingbreakpointic()
+        bpic = self.bpmanager.findprecedingbreakpointic()
         nextic = max(nextic, bpic)
 
         s = self.findsnapshot(nextic)
@@ -739,7 +697,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             #debug("At the beginning of the program. Can't step back")
             return
 
-        highestic = self.findprecedingbreakpointic()
+        highestic = self.bpmanager.findprecedingbreakpointic()
 
         #debug("Highest ic found: ", highestic)
 
@@ -803,7 +761,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if dbg.mode == 'redo':
             nextd = dbg.current_timeline.get_next()
             nextic = nextd.get(dbg.ic, "empty")
-            bpic = self.findnextbreakpointic()
+            bpic = self.bpmanager.findnextbreakpointic()
 
             if nextic == "empty":
                 # There is no function call in the current line -> same as stepping
@@ -863,7 +821,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return
         if dbg.mode == 'redo':
             #debug("Continue in redo mode")
-            bestic = self.findnextbreakpointic()
+            bestic = self.bpmanager.findnextbreakpointic()
             if bestic == -1:
                 #debug("redo_cont: No future bp in executed instructions found")
                 # go to the highest snapshot and continue
@@ -957,134 +915,131 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     # The following functions are the same as in bdp except for
     # The usage of the epdb Breakpoint implementation
 
-    def break_anywhere(self, frame):
-        # This check avoids many message calls
-        if self.is_skipped_module(frame.f_globals.get('__name__')):
-            return False
-        return self.canonic(frame.f_code.co_filename) in self.breaks
+    #def break_anywhere(self, frame):
+    #    # This check avoids many message calls
+    #    if self.is_skipped_module(frame.f_globals.get('__name__')):
+    #        return False
+    #    return self.canonic(frame.f_code.co_filename) in self.breaks
 
-    def break_here(self, frame):
-        filename = self.canonic(frame.f_code.co_filename)
-        if not filename in self.breaks:
-            return False
-        lineno = frame.f_lineno
-        #debug("break_here", filename)
-        if not lineno in self.breaks[filename]:
-            # The line itself has no breakpoint, but maybe the line is the
-            # first line of a function with breakpoint set by function name.
-            lineno = frame.f_code.co_firstlineno
-            if not lineno in self.breaks[filename]:
-                return False
+    #def break_here(self, frame):
+    #    filename = self.canonic(frame.f_code.co_filename)
+    #    if not filename in self.breaks:
+    #        return False
+    #    lineno = frame.f_lineno
+    #    #debug("break_here", filename)
+    #    if not lineno in self.breaks[filename]:
+    #        # The line itself has no breakpoint, but maybe the line is the
+    #        # first line of a function with breakpoint set by function name.
+    #        lineno = frame.f_code.co_firstlineno
+    #        if not lineno in self.breaks[filename]:
+    #            return False
+    #
+    #    # flag says ok to delete temp. bp
+    #    (bp, flag) = self.bpmanager.effective(filename, lineno, frame)
+    #    if bp:
+    #        self.currentbp = bp.number
+    #        if (flag and bp.temporary):
+    #            self.do_clear(str(bp.number))
+    #        return True
+    #    else:
+    #        return False
+    
+    #def set_break(self, filename, lineno, temporary=0, cond = None,
+    #              funcname=None):
+    #    from epdblib.breakpoint import Breakpoint
+    #    filename = self.canonic(filename)
+    #    #import linecache # Import as late as possible
+    #    line = linecache.getline(filename, lineno)
+    #    if not line:
+    #        #debug("END")
+    #        return 'Line %s:%d does not exist' % (filename,
+    #                               lineno)
+    #    if not filename in self.breaks:
+    #        self.breaks[filename] = []
+    #    list = self.breaks[filename]
+    #    if not lineno in list:
+    #        list.append(lineno)
+    #        self.breaks[filename] = list  # This is necessary for the distributed application
+    #    Breakpoint(filename, lineno, temporary, cond, funcname)
+    #    
+    #def clear_break(self, filename, lineno):
+    #    from epdblib.breakpoint import Breakpoint
+    #    debug("Clear Break")
+    #    filename = self.canonic(filename)
+    #    if not filename in self.breaks:
+    #        return 'There are no breakpoints in %s' % filename
+    #    if lineno not in self.breaks[filename]:
+    #        return 'There is no breakpoint at %s:%d' % (filename,
+    #                                lineno)
+    #    # If there's only one bp in the list for that file,line
+    #    # pair, then remove the breaks entry
+    #    for bp in Breakpoint.bplist[filename, lineno][:]:
+    #        #debug("delete Me")
+    #        bp.deleteMe()
+    #    if (filename, lineno) not in Breakpoint.bplist:
+    #        #debug("delete self.breaks")
+    #        l = self.breaks[filename]
+    #        l.remove(lineno)
+    #        self.breaks[filename] = l
+    #        #self.breaks[filename].remove(lineno)
+    #    if not self.breaks[filename]:
+    #        del self.breaks[filename]
 
-        # flag says ok to delete temp. bp
-        (bp, flag) = effective(filename, lineno, frame)
-        if bp:
-            self.currentbp = bp.number
-            if (flag and bp.temporary):
-                self.do_clear(str(bp.number))
-            return True
-        else:
-            return False
+    #def clear_bpbynumber(self, arg):
+    #    from epdblib.breakpoint import Breakpoint
+    #    try:
+    #        number = int(arg)
+    #    except:
+    #        return 'Non-numeric breakpoint number (%s)' % arg
+    #    try:
+    #        bp = Breakpoint.bpbynumber[number]
+    #    except IndexError:
+    #        return 'Breakpoint number (%d) out of range' % number
+    #    if not bp:
+    #        return 'Breakpoint (%d) already deleted' % number
+    #    self.clear_break(bp.file, bp.line)
 
-    def set_break(self, filename, lineno, temporary=0, cond = None,
-                  funcname=None):
-        from epdblib.breakpoint import Breakpoint
-        filename = self.canonic(filename)
-        #import linecache # Import as late as possible
-        line = linecache.getline(filename, lineno)
-        if not line:
-            #debug("END")
-            return 'Line %s:%d does not exist' % (filename,
-                                   lineno)
-        if not filename in self.breaks:
-            self.breaks[filename] = []
-        list = self.breaks[filename]
-        if not lineno in list:
-            list.append(lineno)
-            self.breaks[filename] = list  # This is necessary for the distributed application
-        Breakpoint(filename, lineno, temporary, cond, funcname)
-        #bp = Breakpoint(filename, lineno, temporary, cond, funcname)
+    #def clear_all_file_breaks(self, filename):
+    #    from epdblib.breakpoint import Breakpoint
+    #    filename = self.canonic(filename)
+    #    if not filename in self.breaks:
+    #        return 'There are no breakpoints in %s' % filename
+    #    for line in self.breaks[filename]:
+    #        blist = Breakpoint.bplist[filename, line]
+    #        for bp in blist:
+    #            bp.deleteMe()
+    #    del self.breaks[filename]
 
-    def clear_break(self, filename, lineno):
-        from epdblib.breakpoint import Breakpoint
-        debug("Clear Break")
-        filename = self.canonic(filename)
-        if not filename in self.breaks:
-            return 'There are no breakpoints in %s' % filename
-        if lineno not in self.breaks[filename]:
-            return 'There is no breakpoint at %s:%d' % (filename,
-                                    lineno)
-        # If there's only one bp in the list for that file,line
-        # pair, then remove the breaks entry
-        for bp in Breakpoint.bplist[filename, lineno][:]:
-            #debug("delete Me")
-            bp.deleteMe()
-        if (filename, lineno) not in Breakpoint.bplist:
-            #debug("delete self.breaks")
-            l = self.breaks[filename]
-            l.remove(lineno)
-            self.breaks[filename] = l
-            #self.breaks[filename].remove(lineno)
-        if not self.breaks[filename]:
-            del self.breaks[filename]
-        #debug("self.breaks: ", self.breaks)
+    #def clear_all_breaks(self):
+    #    from epdblib.breakpoint import Breakpoint
+    #    if not self.breaks:
+    #        return 'There are no breakpoints'
+    #    for bp in Breakpoint.bpbynumber:
+    #        if bp:
+    #            bp.deleteMe()
+    #    #self.breaks = {}
+    #    self.breaks.clear()   # As this is a shared dictionary it is important to use clear
 
+    #def get_break(self, filename, lineno):
+    #    filename = self.canonic(filename)
+    #    return filename in self.breaks and \
+    #        lineno in self.breaks[filename]
+    #
+    #def get_breaks(self, filename, lineno):
+    #    from epdblib.breakpoint import Breakpoint
+    #    filename = self.canonic(filename)
+    #    #if filename in self.breaks:
+    #    #    debug("Get_breaks: Filename", filename)
+    #    return filename in self.breaks and \
+    #        lineno in self.breaks[filename] and \
+    #        Breakpoint.bplist[filename, lineno] or []
 
-    def clear_bpbynumber(self, arg):
-        from epdblib.breakpoint import Breakpoint
-        try:
-            number = int(arg)
-        except:
-            return 'Non-numeric breakpoint number (%s)' % arg
-        try:
-            bp = Breakpoint.bpbynumber[number]
-        except IndexError:
-            return 'Breakpoint number (%d) out of range' % number
-        if not bp:
-            return 'Breakpoint (%d) already deleted' % number
-        self.clear_break(bp.file, bp.line)
-
-    def clear_all_file_breaks(self, filename):
-        from epdblib.breakpoint import Breakpoint
-        filename = self.canonic(filename)
-        if not filename in self.breaks:
-            return 'There are no breakpoints in %s' % filename
-        for line in self.breaks[filename]:
-            blist = Breakpoint.bplist[filename, line]
-            for bp in blist:
-                bp.deleteMe()
-        del self.breaks[filename]
-
-    def clear_all_breaks(self):
-        from epdblib.breakpoint import Breakpoint
-        if not self.breaks:
-            return 'There are no breakpoints'
-        for bp in Breakpoint.bpbynumber:
-            if bp:
-                bp.deleteMe()
-        #self.breaks = {}
-        self.breaks.clear()   # As this is a shared dictionary it is important to use clear
-
-    def get_break(self, filename, lineno):
-        filename = self.canonic(filename)
-        return filename in self.breaks and \
-            lineno in self.breaks[filename]
-
-    def get_breaks(self, filename, lineno):
-        from epdblib.breakpoint import Breakpoint
-        filename = self.canonic(filename)
-        #if filename in self.breaks:
-        #    debug("Get_breaks: Filename", filename)
-        return filename in self.breaks and \
-            lineno in self.breaks[filename] and \
-            Breakpoint.bplist[filename, lineno] or []
-
-    def get_file_breaks(self, filename):
-        filename = self.canonic(filename)
-        if filename in self.breaks:
-            return self.breaks[filename]
-        else:
-            return []
+    #def get_file_breaks(self, filename):
+    #    filename = self.canonic(filename)
+    #    if filename in self.breaks:
+    #        return self.breaks[filename]
+    #    else:
+    #        return []
 
     def lookupmodule(self, filename):
         """Helper function for break/clear parsing -- may be overridden.
@@ -1110,24 +1065,27 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 return fullname
         return None
 
-    def get_all_breaks(self):
-        return self.breaks
+    #def get_all_breaks(self):
+    #    return self.breaks
 
     def cmd_show_break(self, arg):
-        from epdblib.breakpoint import Breakpoint
-        debug("Breakpoint by number: ", Breakpoint.bpbynumber)
-        debug("Breakpoint list: ", Breakpoint.bplist)
-        debug("self.breaks: ", self.breaks)
+        debug("TODO")
+        #from epdblib.breakpoint import Breakpoint
+        #debug("Breakpoint by number: ", Breakpoint.bpbynumber)
+        #debug("Breakpoint list: ", Breakpoint.bplist)
+        #debug("self.breaks: ", self.breaks)
 
     def cmd_break(self, arg, temporary = 0):
-        from epdblib.breakpoint import Breakpoint
         # break [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
             if self.breaks:  # There's at least one
                 #print("Num Type         Disp Enb   Where", file=self.stdout)
-                for bp in Breakpoint.bpbynumber:
-                    if bp:
-                        bp.bpprint(self.stdout)
+                # TODO put some output here
+                debug("TODO output")
+                self.bpmanager.show()
+                #for bp in Breakpoint.bpbynumber:
+                #    if bp:
+                #        bp.bpprint(self.stdout)
             return
         # parse arguments; comma has lowest precedence
         # and cannot occur in filename
@@ -1229,7 +1187,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         clear -> clear all breaks, ask for confirmation
         clear file:lineno -> clear all breaks at file:lineno
         clear bpno bpno ... -> clear breakpoints by number"""
-        from epdblib.breakpoint import Breakpoint
+        #from epdblib.breakpoint import Breakpoint
         if not arg:
             try:
                 reply = input('Clear all breaks? ')
@@ -1237,7 +1195,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 reply = 'no'
             reply = reply.strip().lower()
             if reply in ('y', 'yes'):
-                self.clear_all_breaks()
+                self.manager.clear_all_breaks()
             return
         if ':' in arg:
             # Make sure it works for "clear C:\foo\bar.py:12"
@@ -1259,8 +1217,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             except ValueError:
                 #print('Breakpoint index %r is not a number' % i, file=self.stdout)
                 continue
-
-            if not (0 <= i < len(Breakpoint.bpbynumber)):
+            
+            # TODO don't directly access the bpmanager
+            if not (0 <= i < len(self.bpmanager.bpbynumber)):
                 debug('No breakpoint numbered', i)
                 continue
 
@@ -1334,62 +1293,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         return filename
     
     def cleanup(self):
+        self.dbgcom.send_debugmessage("Cleanup")
         self.mp.quit()
+        self.dbgcom.send_debugmessage("Quitted")
         shutil.rmtree(dbg.tempdir)
-        
-
-# copied from pdb to make use of epdb's breakpoint implementation
-def effective(file, line, frame):
-    """Determine which breakpoint for this file:line is to be acted upon.
-
-    Called only if we know there is a bpt at this
-    location.  Returns breakpoint that was triggered and a flag
-    that indicates if it is ok to delete a temporary bp.
-
-    """
-    from epdblib.breakpoint import Breakpoint
-    possibles = Breakpoint.bplist[file, line]
-    for i in range(0, len(possibles)):
-        b = possibles[i]
-        if b.enabled == 0:
-            continue
-        if not epdblib.basedebugger.BaseDebugger.checkfuncname(b, frame):
-            continue
-        # Count every hit when bp is enabled
-        b.hits = b.hits + 1
-        if not b.cond:
-            # If unconditional, and ignoring,
-            # go on to next, else break
-            if b.ignore > 0:
-                b.ignore = b.ignore -1
-                continue
-            else:
-                # breakpoint and marker that's ok
-                # to delete if temporary
-                return (b, 1)
-        else:
-            # Conditional bp.
-            # Ignore count applies only to those bpt hits where the
-            # condition evaluates to true.
-            try:
-                val = eval(b.cond, frame.f_globals,
-                       frame.f_locals)
-                if val:
-                    if b.ignore > 0:
-                        b.ignore = b.ignore -1
-                        # continue
-                    else:
-                        return (b, 1)
-                # else:
-                #   continue
-            except:
-                # if eval fails, most conservative
-                # thing is to stop on breakpoint
-                # regardless of ignore count.
-                # Don't delete temporary,
-                # as another hint to user.
-                return (b, 0)
-    return (None, None)
     
 def run(statement, globals=None, locals=None):
     Epdb().run(statement, globals, locals)
