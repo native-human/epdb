@@ -137,6 +137,9 @@ class UdsDbgCom():
         """Not supported yet"""
         # because epdbs implementation calls the blocking cmdloop there
 
+    def do_pid(self, arg):
+        return self.debugger.cmd_pid()
+
     def preloop(self):
         self.debugger.preprompt()
 
@@ -421,6 +424,9 @@ class StdDbgCom(epdblib.asyncmd.Asyncmd):
     def do_commands(self, arg):
         """Not supported yet"""
         # because epdbs implementation calls the blocking cmdloop there
+
+    def do_pid(self, arg):
+        return self.debugger.cmd_pid()
 
     def precmd(self, line):
         """Handle alias expansion and ';;' separator."""

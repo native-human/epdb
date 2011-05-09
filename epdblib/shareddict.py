@@ -26,11 +26,13 @@ class Connection:
     def __init__(self, sock, address=None):
         self.sock = sock
         self.address = address
+
     def send(self, b):
         assert isinstance(b, bytes)
         l = struct.pack('!Q', len(b))
         self.sock.send(l)
         self.sock.send(b)
+        
     def recv(self):
         l = self.sock.recv(8, socket.MSG_WAITALL)
         if l == b'':
@@ -38,6 +40,7 @@ class Connection:
         l = struct.unpack('!Q', l)[0]
         ret = self.sock.recv(l, socket.MSG_WAITALL)
         return ret
+    
     def close(self):
         self.sock.close()
 
@@ -50,17 +53,21 @@ def listen(address):
 class Listener:
     def __init__(self, sock):
         self.sock = sock
+ 
     def accept(self):
         client,address = self.sock.accept()
         return Connection(client, address=address)
+ 
     def close(self):
         self.sock.close()
 
 class ServerDict(dict):
     def __iter__(self):
         return dict.copy(self)
+ 
     def keys(self):
         return list(dict.keys(self))
+ 
     def _copy(self): # The normal copy version returns a dict
         r = ServerDict()
         r.update(self)
@@ -393,6 +400,7 @@ def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=T
         sdpid = os.fork() # TODO dofork returns when the server shutdowns?
         if not sdpid:
             return sdpid
+    
     do_quit = False
     connectiondict = {}
     poll = select.epoll()
@@ -589,6 +597,11 @@ class DictProxy:
 
     def close(self):
         self.conn.close()
+        
+    def __eq__(self, other):
+        d_self = self.copy()
+        d_other = other.copy()
+        return d_self == d_other
 
 class ListProxy:
     def __init__(self, objref, sockfile=None, conn=None):
@@ -600,7 +613,8 @@ class ListProxy:
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
-        self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
+        dump = pickle.dumps((self.objref, method, args, kargs))
+        self.conn.send(dump)
         t,r = pickle.loads(self.conn.recv())
         if t == 'RET':
             return r
@@ -661,7 +675,12 @@ class ListProxy:
         return self._remote_invoke('sort',(key, reverse), {})
 
     def close(self):
-        self.sock.close()
+        self.conn.close()
+    
+    def __eq__(self, other):
+        l_self = self[:]
+        l_other = other[:]
+        return l_self == l_other
 
 class TimelineProxy:
     def __init__(self, objref, sockfile=None, conn=None):

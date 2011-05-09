@@ -8,6 +8,7 @@ from epdblib import dbg
 import sys
 
 class Bp:
+    # TODO storing the manager in the breakpoint probably doesn't work with shared breakpoints
     def __init__(self, manager, number, file, line, temporary=0, cond=None, funcname=None):
         ""
         self.funcname = funcname
@@ -30,10 +31,11 @@ class Bp:
 
     def delete(self):
         self.manager.delete(self)
-        
-    def update(self):
-        """Should be called after changes to the breakpoint"""
-        self.manager.update(self)
+
+    # This probably doesn't work
+    #def update(self):
+    #    """Should be called after changes to the breakpoint"""
+    #    self.manager.update(self)
 
     def enable(self):
         self.enabled = 1
@@ -64,6 +66,9 @@ class Bp:
             else:
                 ss = ''
             print(('\tbreakpoint already hit %d time%s' % (self.hits, ss)), file=out)
+    
+    def __repr__(self):
+        return "<Bp {}>".format(self.number)
 
 class BreakpointManager:
     def __init__(self, proxycreator):
@@ -89,10 +94,12 @@ class BreakpointManager:
         bp = Bp(self, self.next, file, line, temporary, cond, funcname)
         
         self.next += 1
-        
+
         self.bpbynumber.append(bp)
         if (file, line) in self.bplist:
-            self.bplist[file, line].append(bp)
+            l = self.bplist[file, line]
+            l.append(bp)
+            self.bplist[file, line] = l # necessary for distributed version
         else:
             self.bplist[file, line] = [bp]
             
@@ -105,21 +112,16 @@ class BreakpointManager:
         
         return bp
 
-    def update(self, breakpoint):
-        "Updates the breakpoint in the remote system"
-        self.bpbynumber[breakpoint.number] = breakpoint
-        do_break = False
-        for key in self.bplist:
-            bplist = self.bplist[key]
-            for i,bp in enumerate(bplist):
-                if bp.number == breakpoint.number:
-                    bplist[i] = bp
-                    self.bplist[key] = bplist
-                    do_break = True
-                    break
-            if do_break:
+    def update(self, bp):
+        """Updates the breakpoint in the remote system. Only updates additional
+        information like enable, ignore, hits, etc., but not file, line"""
+        self.bpbynumber[bp.number] = bp
+        bplist = self.bplist[(bp.file, bp.line)]
+        for i,b in enumerate(bplist):
+            if b == bp:
+                bplist[i] = bp
+                self.bplist[(bp.file, bp.line)] = bplist
                 break
-        l = self.bplist[(bp.file, bp.line)]
 
     def delete(self, bp):
         filename = bp.file
@@ -128,17 +130,7 @@ class BreakpointManager:
             return 'There are no breakpoints in %s' % filename
         if lineno not in self.breaks[filename]:
             return 'There is no breakpoint at %s:%d' % (filename, lineno)
-        # If there's only one bp in the list for that file,line
-        # pair, then remove the breaks entry
-        #for b in self.bplist[filename, lineno][:]:
-        #    index = (b.file, b.line)
-        #    self.bpbynumber[b.number] = None   # No longer in list
-        #    l = self.bplist[index]
-        #    l.remove(b)
-        #    self.bplist[index] = l # needed for distributed version
-        #    if not self.bplist[index]:
-        #        # No more bp for this f:l combo
-        #        del self.bplist[index]
+
         self.bpbynumber[bp.number] = None
         l = self.bplist[filename, lineno]
         l.remove(bp)
@@ -148,7 +140,9 @@ class BreakpointManager:
             self.bplist[filename, lineno] = l # needed for distributed version
 
         if (filename, lineno) not in self.bplist:
-            self.breaks[filename].remove(lineno)
+            l = self.breaks[filename]
+            l.remove(lineno)
+            self.breaks[filename] = l  # needed for distributed version
         if self.breaks[filename] == []:
             del self.breaks[filename]
 
@@ -172,7 +166,7 @@ class BreakpointManager:
         del self.breaks[filename]
 
     def bp_exists(self, filename, lineno):
-        return lineno in self.breaks
+        return lineno in self.breaks[filename]
 
     def file_has_breaks(self, filename):
         return filename in self.breaks
@@ -193,7 +187,7 @@ class BreakpointManager:
                 if not self.bplist[index]:
                     # No more bp for this f:l combo
                     del self.bplist[index]
-                bp.deleteMe()
+                #bp.deleteMe()
         self.breaks.clear()
 
     # TODO: better rename this to has_break
@@ -236,7 +230,7 @@ class BreakpointManager:
         if not b.func_first_executable_line:
             # The function is entered for the 1st time.
             b.func_first_executable_line = frame.f_lineno
-            b.update()
+            self.update(b)
     
         if  b.func_first_executable_line != frame.f_lineno:
             # But we are not at the first line number: don't break.
@@ -261,13 +255,13 @@ class BreakpointManager:
                 continue
             # Count every hit when bp is enabled
             b.hits = b.hits + 1
-            b.update()
+            self.update(b)
             if not b.cond:
                 # If unconditional, and ignoring,
                 # go on to next, else break
                 if b.ignore > 0:
                     b.ignore = b.ignore -1
-                    b.update()
+                    self.update(b)
                     continue
                 else:
                     # breakpoint and marker that's ok
@@ -365,97 +359,3 @@ class LocalBreakpointManager(BreakpointManager):
                                                          # effective break .... see effective()
         self.breaks = {} # breaks indexed by filename
         self.next = 1
-
-#class Breakpoint:
-#
-#    """Breakpoint class
-#
-#    Implements temporary breakpoints, ignore counts, disabling and
-#    (re)-enabling, and conditionals.
-#
-#    Breakpoints are indexed by number through bpbynumber and by
-#    the file,line tuple using bplist.  The former points to a
-#    single instance of class Breakpoint.  The latter points to a
-#    list of such instances since there may be more than one
-#    breakpoint per line.
-#
-#    """
-#
-#    # XXX Keeping state in the class is a mistake -- this means
-#    # you cannot have more than one active Bdb instance.
-#
-#    next = 1        # Next bp to be assigned
-#    #bplist = {}     # indexed by (file, lineno) tuple
-#    #bpbynumber = [None] # Each entry is None or an instance of Bpt
-#                # index 0 is unused, except for marking an
-#                # effective break .... see effective()
-#
-#    bplist = DictProxy('bplist', sockfile=dbg.shareddict_sock)
-#    bpbynumber = ListProxy('bpbynumber', sockfile=dbg.shareddict_sock)
-#
-#    def __init__(self, file, line, temporary=0, cond=None, funcname=None):
-#        self.funcname = funcname
-#        # Needed if funcname is not None.
-#        self.func_first_executable_line = None
-#        self.file = file    # This better be in canonical form!
-#        self.line = line
-#        self.temporary = temporary
-#        self.cond = cond
-#        self.enabled = 1
-#        self.ignore = 0
-#        self.hits = 0
-#        self.number = Breakpoint.next
-#        Breakpoint.next = Breakpoint.next + 1
-#        # Build the two lists
-#        self.bpbynumber.append(self)
-#        if (file, line) in self.bplist:
-#            self.bplist[file, line].append(self)
-#        else:
-#            self.bplist[file, line] = [self]
-#
-#    def __eq__(self, other):
-#        if self.number == other.number:
-#            return True
-#        return False
-#
-#    def deleteMe(self):
-#        index = (self.file, self.line)
-#        self.bpbynumber[self.number] = None   # No longer in list
-#        #debug("remove called on", self.bplist[index])
-#        l = self.bplist[index]
-#        l.remove(self)
-#        self.bplist[index] = l
-#        #self.bplist[index].remove(self)
-#        if not self.bplist[index]:
-#            # No more bp for this f:l combo
-#            #debug('call dell on ', self.bplist)
-#            del self.bplist[index]
-#
-#    def enable(self):
-#        self.enabled = 1
-#
-#    def disable(self):
-#        self.enabled = 0
-#
-#    def bpprint(self, out=None):
-#        if out is None:
-#            out = sys.stdout
-#        if self.temporary:
-#            disp = 'del  '
-#        else:
-#            disp = 'keep '
-#        if self.enabled:
-#            disp = disp + 'yes  '
-#        else:
-#            disp = disp + 'no   '
-#        print('%-4dbreakpoint   %s at %s:%d' % (self.number, disp,
-#                                                       self.file, self.line), file=out)
-#        if self.cond:
-#            print('\tstop only if %s' % (self.cond,), file=out)
-#        if self.ignore:
-#            print('\tignore next %d hits' % (self.ignore), file=out)
-#        if (self.hits):
-#            if (self.hits > 1): ss = 's'
-#            else: ss = ''
-#            print(('\tbreakpoint already hit %d time%s' %
-#                          (self.hits, ss)), file=out)

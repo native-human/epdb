@@ -4,6 +4,7 @@ import sys
 import os
 import types
 from epdblib import breakpoint
+from epdblib.debug import debug
 
 class BaseDebuggerQuit(Exception):
     """Exception to quit the debugger"""
@@ -203,6 +204,7 @@ class BaseDebugger(Tracer):
     def break_here(self, frame):
         filename = self.canonic(frame.f_code.co_filename)
         if not self.bpmanager.file_has_breaks(filename):
+            debug("break_here returns false because file has no breaks")
             return False
         lineno = frame.f_lineno
         if not self.bpmanager.bp_exists(filename, lineno):
@@ -220,6 +222,7 @@ class BaseDebugger(Tracer):
                 self.do_clear(str(bp.number)) # TODO this looks suspicous, does do_clear exist?
             return True
         else:
+            debug("break_here returns false because file has no effective breaks")
             return False
 
     def _set_stopinfo(self, stopframe, returnframe, stoplineno=-1):

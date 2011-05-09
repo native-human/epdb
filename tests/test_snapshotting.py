@@ -11,6 +11,7 @@ import atexit
 import tempfile
 import shutil
 import traceback
+from helpers import CoverageTestCase
 
 def server_dummy(dofork=True):
     return
@@ -24,6 +25,12 @@ def fork():
         print("patched fork")
         atexit._clear()
     return pid
+
+class ImportTestCase(CoverageTestCase):
+    def runTest(self):
+        if 'epdblib.snapshotting' in sys.modules:
+            del sys.modules['epdblib.snapshotting']
+        import epdblib.snapshotting
 
 class SnapshottingTestCase(unittest.TestCase):
     def setUp(self):
@@ -49,9 +56,13 @@ class SnapshottingTestCase(unittest.TestCase):
         self.cov.start()
 
     def shareddict_server_process(self):
+        self.cov = coverage(data_file=".coverage.snapshotting.shareddict.server", source=["epdblib"], cover_pylib=True)
+        self.cov.start()
         self.server = epdblib.shareddict.server(self.sock_dir,
                                                 dofork=False,
                                                 exitatclose=False)
+        self.cov.stop()
+        self.cov.save()
 
     def server_process(self):
         self.cov = coverage(data_file=".coverage.snapshotting.server", source=["epdblib"], cover_pylib=True)
@@ -81,20 +92,17 @@ class SnapshottingTestCase(unittest.TestCase):
         #print("TEAR DOWN END")
     
     def test_snapshotting(self):
-        if 'epdblib.snapshotting' in sys.modules:
-            del sys.modules['epdblib.snapshotting']
-        import epdblib.snapshotting
         epdblib.snapshotting.os.fork = fork
         self.mp.set_up_client()
         
         try:
-        #    snapshot = self.mp.make_snapshot(0)
+            snapshot = self.mp.make_snapshot(0)
             pass
         except:
-            exctype,exc,tb = sys.exc_info()
-            print(exctype, exc)
-            traceback.print_tb(tb)
-            print("snapshot pid", os.getpid())
+            #exctype,exc,tb = sys.exc_info()
+            #print(exctype, exc)
+            #traceback.print_tb(tb)
+            #print("snapshot pid", os.getpid())
             sys.exit(0)
 
 if __name__ == '__main__':

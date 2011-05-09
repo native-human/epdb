@@ -8,6 +8,13 @@ import tempfile
 import os
 import shutil
 from epdblib import dbg
+from helpers import CoverageTestCase
+
+class ImportTestCase(CoverageTestCase):
+    def runTest(self):
+        if 'epdblib.shareddict' in sys.modules:
+            del sys.modules['epdblib.shareddict']
+        import epdblib.shareddict
 
 class ShareddictTestCase(unittest.TestCase):
     def setUp(self):
@@ -39,9 +46,6 @@ class ShareddictTestCase(unittest.TestCase):
         self.cov.save()
     
     def test_timelinesproxy_new(self):
-        if 'epdblib.shareddict' in sys.modules:
-            del sys.modules['epdblib.shareddict']
-            import epdblib.shareddict
         proxycreator = epdblib.shareddict.ProxyCreator(self.sock_dir)
         #timelines = epdblib.shareddict.TimelinesProxy("timelines", sockfile=self.sockfile)
         timelines = proxycreator.create_timelines("timelines")
@@ -53,15 +57,13 @@ class ShareddictTestCase(unittest.TestCase):
         timelines.close()
 
     def test_dictproxy_new(self):
-        if 'epdblib.shareddict' in sys.modules:
-            del sys.modules['epdblib.shareddict']
-            import epdblib.shareddict
         proxycreator = epdblib.shareddict.ProxyCreator(self.sock_dir)
         #timelines = epdblib.shareddict.TimelinesProxy("timelines", sockfile=self.sockfile)
         d = proxycreator.create_dict("breaks")
         d["hallo"] = "Welt"
         d.close()
-    #
+    
+
     #@unittest.skip
     #def test_timelinesproxy(self):
     #    if 'epdblib.shareddict' in sys.modules:
