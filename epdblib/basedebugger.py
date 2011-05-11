@@ -55,12 +55,16 @@ class Tracer:
         return self.trace_dispatch
 
     def is_skipped_module(self, module_name):
-        for pattern in self.skip:
-            if fnmatch.fnmatch(module_name, pattern):
-                return True
+        if module_name in self.skip:
+            return True
+        #for pattern in self.skip:
+        #    #if fnmatch.fnmatch(module_name, pattern):
+        #    if module_name == pattern:
+        #        return True
         return False
 
     def dispatch_line(self, frame):
+        #print("dispatching:", frame.f_code.co_filename, frame.f_lineno, frame.f_trace is None)
         if not self._wait_for_mainpyfile:
             self.user_line(frame)
         if self.quitting:
@@ -74,8 +78,20 @@ class Tracer:
             return self.trace_dispatch
         # Don't trace this function, if it should not be traced
         if not self.trace_here(frame):
+            #print("Don't trace this:", frame.f_code.co_filename, end=" ")
+            #f = frame
+            #while f and not f is self.botframe:
+            #    print(f.f_trace is None, f.f_code.co_filename, end=" ")
+            #    f = f.f_back
+            #print()
             return
-
+        #print("Trace this:", frame.f_code.co_filename, frame.f_trace, end=" ")
+        #f = frame
+        #while f and not f is self.botframe:
+        #    print(f.f_trace is None, f.f_code.co_filename, end=" ")
+        #    f = f.f_back
+        #print()
+        
         if self._wait_for_mainpyfile:
             self._wait_for_mainpyfile = 0
             self.user_first(frame)
@@ -204,7 +220,6 @@ class BaseDebugger(Tracer):
     def break_here(self, frame):
         filename = self.canonic(frame.f_code.co_filename)
         if not self.bpmanager.file_has_breaks(filename):
-            debug("break_here returns false because file has no breaks")
             return False
         lineno = frame.f_lineno
         if not self.bpmanager.bp_exists(filename, lineno):
@@ -222,7 +237,6 @@ class BaseDebugger(Tracer):
                 self.do_clear(str(bp.number)) # TODO this looks suspicous, does do_clear exist?
             return True
         else:
-            debug("break_here returns false because file has no effective breaks")
             return False
 
     def _set_stopinfo(self, stopframe, returnframe, stoplineno=-1):
@@ -302,22 +316,11 @@ class BaseDebugger(Tracer):
         if not self.bpmanager.file_has_breaks():
             return 'There are no breakpoints in %s' % filename
         self.bpmanager.clear_all_file_breaks(filename)
-        #for line in self.breaks[filename]:
-        #    blist = Breakpoint.bplist[filename, line]
-        #    for bp in blist:
-        #        bp.deleteMe()
-        #del self.breaks[filename]
 
     def clear_all_breaks(self):
         if not self.bpmanager.any_break_exists():
             return 'There are no breakpoints'
         self.bpmanager.clear_all_breaks()
-
-    # I believe I don't need this
-    #def get_break(self, filename, lineno):
-    #    filename = self.canonic(filename)
-    #    
-    #    return self.bpmanager.get_break(filename, lineno)
 
     def get_breaks(self, filename, lineno):
         filename = self.canonic(filename)

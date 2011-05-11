@@ -20,6 +20,12 @@ class DebuggerStub:
     def add_skip_module(self, module):
         self.skip.add(module)
 
+class ImportImportingTestCase(CoverageTestCase):
+    def runTest(self):
+        if 'epdblib.importer' in sys.modules:
+            del sys.modules['epdblib.importer']
+        import epdblib.importer
+
 class ImportTestCase(CoverageTestCase):
     def setUp(self):
         self.dbg = DebuggerStub()
@@ -35,7 +41,6 @@ class ImportTestCase(CoverageTestCase):
 
 class PatchRandomTestCase(ImportTestCase):
     def test_patch_random(self):
-        print('\n')
         import random
         imp.reload(random)
         t = random.randint(1,2)
@@ -44,7 +49,6 @@ class PatchRandomTestCase(ImportTestCase):
 
 class PatchRandomFromTestCase(ImportTestCase):
     def test_patch_random_from(self):
-        print('\n')
         if 'random' in sys.modules.keys():
             del sys.modules['random']
         from random import randint
@@ -54,19 +58,14 @@ class PatchRandomFromTestCase(ImportTestCase):
 
 class PatchSubmodulesTestCase(ImportTestCase):
     def test_patch_spam_ham(self):
-        print('\n')
         import spam.eggs.ham
         self.assertEqual(42, spam.eggs.ham.hello_world())
         self.assertIn('spam.eggs.ham', self.dbg.skip)
 
 class ImportTestCase(ImportTestCase):
     def test_builtins(self):
-        print('\n')
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
-        if 'epdblib.importer' in sys.modules:
-            del sys.modules['epdblib.importer']
-        import epdblib.importer
         import builtins
         self.assertEqual(builtins.dir(), "patched dir")
 

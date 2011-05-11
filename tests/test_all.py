@@ -233,7 +233,7 @@ if __name__ == "__main__":
          "test_import", 
          "test_com", 
          "test_shareddict",
-         #"test_snapshotting", 
+         "test_snapshotting", 
          "test_debugger", 
          "test_breakpoint",
          "test_basedebugger"])
