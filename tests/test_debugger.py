@@ -37,7 +37,10 @@ class TimelineProxyMock:
 
     def get_nde(self):
         return {}
-        
+    
+    def get_continue(self):
+        return {}
+    
     def get_name(self):
         return self.objref
    

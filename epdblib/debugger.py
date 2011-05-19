@@ -219,14 +219,15 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
         import builtins
-        bltins = builtins
+        #bltins = builtins
         imp.reload(sys.modules['random'])
         imp.reload(sys.modules['time'])
         import __main__
         __main__.__dict__.clear()
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
-                                  "__builtins__": bltins,
+                                  "__builtins__": __builtins__,
+                                  #"__builtins__": bltins,
                                 })
 
         # When basedebugger sets tracing, a number of call and line events happens
@@ -348,6 +349,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
+        #debug("inter exc", exc_type, exc_value)
+        self.send_debugmessage("interaction, because of exception: {0} {1}".format(
+            exc_type, exc_value
+        ))
         self.interaction(frame, exc_traceback)
 
     def add_skip_module(self, module):
@@ -403,7 +408,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             #debug("Make snapshot because of running time")
             r = self.make_snapshot()
             self.runningtime = 0
-
+        
         self.lastline = "{filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
         def setmode():
             #debug("setmode: ", dbg.ic, dbg.current_timeline.get_max_ic())
@@ -432,6 +437,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 if self.break_here(frame):
                     setmode()
                     self.interaction(frame, None)
+
         elif self.running_mode == 'next':
             setmode()
             if self.break_here(frame):
@@ -439,15 +445,17 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 if dbg.mode == 'redo':
                     self.set_resources()
                 self.interaction(frame, None)
-            elif self.stopnocalls and self.nocalls <= self.stopnocalls:
+            elif not self.stopnocalls is None and self.nocalls <= self.stopnocalls:
                 if dbg.mode == 'redo':
                     self.set_resources()
                 self.interaction(frame, None)
+
         elif self.running_mode == 'step':
             setmode()
             if dbg.mode == 'redo':
                 self.set_resources()
             self.interaction(frame, None)
+
         elif self.running_mode == 'stop_at_ic':
             if self.stop_at_ic <= dbg.ic:
                 # Stop here but some variables before stopping
@@ -459,8 +467,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 self.interaction(frame, None)
             else:
                 setmode()
+
         elif self.running_mode == 'stopafter':
             self.dbgcom.send_debugmessage("stopafter mode shouldn't be used. 33")
+
         else:
             self.interaction(frame, None)
         self.starttime = time.time()

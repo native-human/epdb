@@ -31,7 +31,7 @@ skipped_modules = ['time', 'debug', 'fnmatch', 'epdb',
                 'json.scanner', 'json.encoder', 'epdblib.importer', 'couchdb',
                 'couchdb.client', 'inspect', 'encodings.latin_1', 'couchdb.http',
                 'couchdb.json', 'calendar', 'decimal', 'numbers',
-                'epdblib.communication']
+                'epdblib.communication', 'email.header', 'datetime']
 
 def is_dbg_callee():
     if os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename) in epdb_modules:
