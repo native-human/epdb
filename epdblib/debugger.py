@@ -41,15 +41,9 @@ def readconfig():
     except:
         pass
     dbgpath = dbgmods
-    #debug("dbgmods", dbgmods)
-    #if not dbgmods in sys.path:
-    #    sys.path.append(dbgmods)
 
 origpath = sys.path[:]
 readconfig()
-
-#debug("PATH: ", sys.path)
-
 
 __pythonimport__ = builtins.__import__
 
@@ -350,7 +344,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if exc_type == SyntaxError:
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
         #debug("inter exc", exc_type, exc_value)
-        self.send_debugmessage("interaction, because of exception: {0} {1}".format(
+        self.dbgcom.send_debugmessage("interaction, because of exception: {0} {1}".format(
             exc_type, exc_value
         ))
         self.interaction(frame, exc_traceback)
@@ -1150,6 +1144,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def interaction(self, frame, traceback):
         self.setup(frame, traceback)
         self.print_stack_entry(self.stack[self.curindex])
+        self.dbgcom.send_stopped()
         self.dbgcom.get_cmd()
         self.forget()
 

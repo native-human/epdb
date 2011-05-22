@@ -303,6 +303,8 @@ class UdsDbgCom():
     def send_debugmessage(self, message):
         self.send("debugmessage#" + message + "\r\n")
 
+    def send_stopped(self):
+        self.send("stopped#")
 
 class StdDbgCom(epdblib.asyncmd.Asyncmd):
     def __init__(self, debugger, stdin=None, stdout=None):
@@ -528,6 +530,9 @@ class StdDbgCom(epdblib.asyncmd.Asyncmd):
 
     def send_clear_success(self, number):
         self.send_raw("clear breakpoint" + str(number)+ "\r\n")
+
+    def send_stopped(self):
+        pass
 
     def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
         output = io.StringIO()
