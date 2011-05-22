@@ -111,7 +111,8 @@ class Tracer:
 
     def dispatch_exception(self, frame, arg):
         #if self.stop_here(frame):
-        self.user_exception(frame, arg)
+        if not (self.skip and self.is_skipped_module(frame.f_globals.get('__name__'))):
+            self.user_exception(frame, arg)
         if self.quitting:
             raise BaseDebuggerQuit
         return self.trace_dispatch
@@ -275,7 +276,6 @@ class BaseDebugger(Tracer):
             while frame and frame is not self.botframe:
                 del frame.f_trace
                 frame = frame.f_back
-
 
     # Derived classes and clients can call the following methods
     # to manipulate breakpoints.  These methods return an

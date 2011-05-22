@@ -343,14 +343,11 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
-        #debug("inter exc", exc_type, exc_value)
         self.dbgcom.send_debugmessage("interaction, because of exception: {0} {1}".format(
             exc_type, exc_value
         ))
-        self.interaction(frame, exc_traceback)
 
     def add_skip_module(self, module):
-        #print("Skip new module: ", module)
         self.skip.add(module)
 
     def user_first(self, frame):
