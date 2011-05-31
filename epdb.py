@@ -10,11 +10,6 @@ import traceback
 import _thread
 from epdblib import dbg
 
-#TESTCMD = 'import x; x.main()'
-
-#def test():
-#    run(TESTCMD)
-
 class UsageException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
@@ -96,7 +91,6 @@ def parse_args(argv):
     return epdb, mainpyfile
         
 def main():
-    #print("sys.argv", sys.argv)
     try:
         epdb, mainpyfile = parse_args(sys.argv)
     except UsageException as e:
@@ -104,13 +98,11 @@ def main():
     except HelpException as e:
         help()
         sys.exit(0)
-    #print("mainpyfile", mainpyfile)
-    #print("udsfile", uds_file)
     if not os.path.exists(mainpyfile):
         print('Error:', mainpyfile, 'does not exist')
         sys.exit(1)
 
-    # Replace pdb's dir with script's dir in front of module search path.
+    # Replace epdb's dir with script's dir in front of module search path.
     sys.path[0] = os.path.dirname(mainpyfile)
 
     while 1:
@@ -149,7 +141,6 @@ def main():
             debug('ControllerExit caught')
             break
         except snapshotting.SnapshotExit:
-            #debug('SnapshotExit caught')
             break
         except epdblib.debugger.EpdbPostMortem:
             t = sys.exc_info()[2]
@@ -167,6 +158,9 @@ def main():
             t = sys.exc_info()[2]
             epdb.interaction(frame, t)
 
+            # TODO: Restarting should probably not happen here. Instead do
+            # multiple epdb.interaction calls
+            
             #print("Post mortem debugger finished. The " + mainpyfile +
             #      " will be restarted")
 

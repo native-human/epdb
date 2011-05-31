@@ -234,24 +234,13 @@ class ServerTimeline:
     def get_resources(self):
         return "resources." + self.name
 
-    #def new_server_resource(self, type, location, timeline):
-    #    resource = ServerDict()
-    #    enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
-    #    debug("new server resource:", timeline, type, enclocation)
-    #    return resource
-
     def new_resource(self, type, location):
         """Creates a new resource if it does not exist"""
-        #debug("NEW RESOURCE", type, location, self.name)
         if not (type, location) in self.resources:
-            #debug("Create new resource: ", type, location)
             self.resources[(type, location)] = ServerDict()
-        else:
-            debug("Don't create new resource, because it already exists: ", type, location)
-        #debug("NEW1")
+        #else:
+        #    debug("Don't create new resource, because it already exists: ", type, location)
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
-        #debug("NEW2")
-        #debug("new resource:", self.name, type, enclocation)
         return "resources." + self.name + "." + type + "." + enclocation
 
     def create_manager(self, identification, manager):

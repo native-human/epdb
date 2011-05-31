@@ -40,8 +40,6 @@ def safe_shelve_open(filename, flag='c', protocol=None, writeback=False, block=T
 def orig_open(*args, **kargs):
     return builtins.__orig__open(*args, **kargs)
 
-# TODO: update_stdout shouldn't update the local variable, but the variable on
-# the server
 class StdoutResourceManager:
     def __init__(self, shelvename=None, stdout_cache=None):
         tempdir = os.path.join(dbg.tempdir, "stdout_resource")
@@ -58,15 +56,12 @@ class StdoutResourceManager:
     def save(self):
         id = uuid4().hex
         db = safe_shelve_open(self.shelvename)
-        #db[id] = self.stdout_cache
-        #db[id] = dbg.stdout_cache
         db[id] = dbg.current_timeline.get_stdout_cache()
         db.close()
         return id
 
     def restore(self, id):
         db = safe_shelve_open(self.shelvename)
-        #self.stdout_cache = db[id]
         cache = db[id]
         dbg.current_timeline.set_stdout_cache(cache)
         db.close()
@@ -74,11 +69,7 @@ class StdoutResourceManager:
 
     def update_stdout(self, output):
         dbg.current_timeline.update_stdout_cache(output)
-        #dbg.stdout_cache += output
-        #self.stdout_cache += output
-        #dbg.dbgcom.send_debugmessage("Update stdout: " + repr(self.stdout_cache) + " " + repr(output))
-        #dbg.current_timeline.update_manager(('__stdout__',''), self)
-
+        
     def __reduce__(self):
         return (StdoutResourceManager, (self.shelvename, self.stdout_cache))
 

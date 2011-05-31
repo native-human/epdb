@@ -20,6 +20,7 @@ import epdblib.importer
 import epdblib.basedebugger
 import shutil
 import epdblib.breakpoint
+import operator
 
 from epdblib import dbg
 
@@ -370,7 +371,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #                dbg.mode,
         #                self.running_mode))
         if frame.f_code.co_filename == "<string>":
-            #print("skip string")
             return
 
         if hasattr(self, 'lastframe'):
@@ -491,7 +491,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def set_continue(self):
         if not self.ron:
             return super().set_continue(self)
-            print("roff continue")
+
         # Debugger overhead needed to count instructions
         self.set_step()
         self.running_mode = 'continue'
@@ -548,15 +548,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         l = []
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
-            #for rk in resource:
-            #    debug(" ", rk, resource[rk])
-            #debug("Resource: ", resource)
             rl = []
             for rid in resource:
                 rl.append((rid, resource[rid]))
+            rl.sort(key=operator.itemgetter(0))
             l.append((k[0], k[1], rl))
+            l.sort(key=operator.itemgetter(0))
         self.dbgcom.send_resources(l)
-                #type, location, id, ic
 
     def cmd_ic(self, arg):
         """Shows the current instruction count"""
