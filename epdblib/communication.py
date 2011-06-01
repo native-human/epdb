@@ -1,6 +1,7 @@
 import socket
 import string
 import epdblib.asyncmd
+import cmd
 import io
 import sys
 
@@ -306,12 +307,15 @@ class UdsDbgCom():
     def send_stopped(self):
         self.send("stopped#")
 
-class StdDbgCom(epdblib.asyncmd.Asyncmd):
+class StdDbgCom(cmd.Cmd):
     def __init__(self, debugger, stdin=None, stdout=None):
-        epdblib.asyncmd.Asyncmd.__init__(self, stdin=stdin, stdout=stdout)
+        #epdblib.asyncmd.Asyncmd.__init__(self, stdin=stdin, stdout=stdout)
+        cmd.Cmd.__init__(self, stdin=stdin, stdout=stdout)
         self.debugger = debugger
         self.prompt = '(Epdb) '
         self.aliases = {}
+        self.commands_defining = False # True while in the process of defining
+                                       # a command list
 
     def do_p(self, arg):
         return self.debugger.cmd_print(arg)
@@ -430,10 +434,46 @@ class StdDbgCom(epdblib.asyncmd.Asyncmd):
     def do_pid(self, arg):
         return self.debugger.cmd_pid()
 
+    def onecmd(self, line):
+        """Interpret the argument as though it had been typed in response
+        to the prompt.
+
+        Checks whether this line is typed at the normal prompt or in
+        a breakpoint command list definition.
+        """
+        if not self.commands_defining:
+            return cmd.Cmd.onecmd(self, line)
+        else:
+            return self.handle_command_def(line)
+
+    def handle_command_def(self,line):
+        """ Handles one command line during command list definition. """
+        cmd, arg, line = self.parseline(line)
+        if cmd == 'silent':
+            self.commands_silent[self.commands_bnum] = True
+            return # continue to handle other cmd def in the cmd list
+        elif cmd == 'end':
+            self.cmdqueue = []
+            return 1 # end of cmd list
+        cmdlist = self.commands[self.commands_bnum]
+        if (arg):
+            cmdlist.append(cmd+' '+arg)
+        else:
+            cmdlist.append(cmd)
+        # Determine if we must stop
+        try:
+            func = getattr(self, 'do_' + cmd)
+        except AttributeError:
+            func = self.default
+        # one of the resuming commands
+        if func.__name__ in self.commands_resuming:
+            self.commands_doprompt[self.commands_bnum] = False
+            self.cmdqueue = []
+            return 1
+        return
+
     def precmd(self, line):
         """Handle alias expansion and ';;' separator."""
-        if not line:
-            return
         if not line.strip():
             return line
         args = line.split()

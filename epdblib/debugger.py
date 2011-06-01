@@ -316,7 +316,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     else:
                         debug("Error: No key found for set resources")
                         return
-
             manager = dbg.current_timeline.get_manager(k)
             manager.restore(res)
 

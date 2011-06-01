@@ -17,6 +17,8 @@ import tempfile
 from epdblib.debug import debug
 from epdblib import dbg
 
+sys.path.append('./')
+
 def connect(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(address)
@@ -490,6 +492,7 @@ def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=T
         sys.exit(0)
 
 # TODO Fix it don't use /tmp/shareddict
+# I think this function can be removed
 def client():
     con = connect('/tmp/shareddict')
 
@@ -524,14 +527,6 @@ class DictProxy:
         self.objref = objref
 
     def _remote_invoke(self, method, args, kargs):
-        #debug("Dict Proxy/Remote invoke", self.objref, method, args, kargs, os.getpid())
-        #fn = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_back.f_code.co_filename)
-        #lno = sys._current_frames()[_thread.get_ident()].f_back.f_back.f_back.f_lineno
-        #fn2 = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_back.f_code.co_filename)
-        #lno2 = sys._current_frames()[_thread.get_ident()].f_back.f_back.f_lineno
-        #fn3 = os.path.basename(sys._current_frames()[_thread.get_ident()].f_back.f_code.co_filename)
-        #lno3 = sys._current_frames()[_thread.get_ident()].f_back.f_lineno
-        #debug('Filename: ', fn, lno, fn2, lno2, fn3, lno3)
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
         recv = self.conn.recv()
         t,r = pickle.loads(recv)
@@ -760,7 +755,6 @@ class TimelineProxy:
         return proxy
 
     def new_resource(self, type, location):
-        #debug('new resource')
         objref = self._remote_invoke('new_resource',(type, location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
