@@ -244,6 +244,10 @@ class ServerTimeline:
         #    debug("Don't create new resource, because it already exists: ", type, location)
         enclocation = str(base64.b64encode(bytes(location, 'utf-8')),'utf-8')
         return "resources." + self.name + "." + type + "." + enclocation
+    
+    def has_resource(self, type, location):
+        """Creates a new resource if it does not exist"""
+        return (type, location) in self.resources
 
     def create_manager(self, identification, manager):
         """identification is a tuple (type, location)"""
@@ -748,6 +752,9 @@ class TimelineProxy:
         objref = self._remote_invoke('get_resource',(type,location), {})
         proxy = DictProxy(objref=objref, conn=self.conn)
         return proxy
+
+    def has_resource(self, type, location):
+        return self._remote_invoke('has_resource',(type, location), {})
 
     def get_resources(self):
         objref = self._remote_invoke('get_resources',(), {})

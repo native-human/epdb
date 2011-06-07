@@ -300,8 +300,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def set_resources(self):
         """Sets the resources for the actual position"""
-        #debug("set resources")
-        #debug("r: ", dbg.current_timeline.get_resources())
         for k in dbg.current_timeline.get_resources():
             resource = dbg.current_timeline.get_resource(*k)
             for i in range(dbg.ic, -1, -1):
@@ -314,8 +312,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     if not res is None:
                         break
                     else:
-                        debug("Error: No key found for set resources")
+                        debug("Error: No key found for set_resources")
                         return
+            self.dbgcom.send_debugmessage("Restoring resource {} {} {}".format(k, i, res))
             manager = dbg.current_timeline.get_manager(k)
             manager.restore(res)
 
@@ -669,7 +668,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return
 
         if dbg.mode == 'post_mortem':
-            self.do_rstep(arg)
+            self.cmd_rstep(arg)
 
         if dbg.ic > dbg.current_timeline.get_max_ic():
             dbg.current_timeline.set_max_ic(dbg.ic)
