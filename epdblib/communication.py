@@ -5,7 +5,29 @@ import cmd
 import io
 import sys
 
-class UdsDbgCom():
+class ComHelp:
+    """ This class defines the help for the communication"""
+    def __init__(self, writer):
+        self.write = writer
+    
+    def help_quit(self):
+        self.write("""q(uit) or exit - Quit from the debugger.
+The program being executed is aborted.""")
+    
+    def help_break(self):
+        self.write("""b(reak) ([file:]lineno | function) [, condition]
+With a line number argument, set a break there in the current
+file.  With a function name, set a break at first executable line
+of that function.  Without argument, list all breaks.  If a second
+argument is present, it is a string specifying an expression
+which must evaluate to true before the breakpoint is honored.
+
+The line number may be prefixed with a filename and a colon,
+to specify a breakpoint in another file (probably one that
+hasn't been loaded yet).  The file is searched for on sys.path;
+the .py suffix may be omitted.""")
+    
+class UdsDbgCom:
     def __init__(self, debugger, filename):
         self.debugger = debugger
         self.prompt = '(Epdb) '
@@ -307,10 +329,11 @@ class UdsDbgCom():
     def send_stopped(self):
         self.send("stopped#")
 
-class StdDbgCom(cmd.Cmd):
+class StdDbgCom(cmd.Cmd, ComHelp):
     def __init__(self, debugger, stdin=None, stdout=None):
         #epdblib.asyncmd.Asyncmd.__init__(self, stdin=stdin, stdout=stdout)
         cmd.Cmd.__init__(self, stdin=stdin, stdout=stdout)
+        ComHelp.__init__(self, print)
         self.debugger = debugger
         self.prompt = '(Epdb) '
         self.aliases = {}
@@ -328,6 +351,7 @@ class StdDbgCom(cmd.Cmd):
         return self.debugger.cmd_snapshot(arg, temporary)
 
     def do_restore(self, arg):
+        """Restore the snapshot with the given number"""
         return self.debugger.cmd_restore(arg)
 
     def do_continued(self, arg):

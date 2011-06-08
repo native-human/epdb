@@ -80,13 +80,6 @@ nde = {}
 # ude ... undo effects dictionary ic:effect effect is a function
 ude = {}
 
-## undod
-## Will be overwritten by an Proxy
-#undod = {}
-
-#manager = None
-#server = None
-
 modules = []
 
 stdout_cache = ''

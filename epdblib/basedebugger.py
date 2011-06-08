@@ -57,14 +57,9 @@ class Tracer:
     def is_skipped_module(self, module_name):
         if module_name in self.skip:
             return True
-        #for pattern in self.skip:
-        #    #if fnmatch.fnmatch(module_name, pattern):
-        #    if module_name == pattern:
-        #        return True
         return False
 
     def dispatch_line(self, frame):
-        #print("dispatching:", frame.f_code.co_filename, frame.f_lineno, frame.f_trace is None)
         if not self._wait_for_mainpyfile:
             self.user_line(frame)
         if self.quitting:
@@ -78,19 +73,7 @@ class Tracer:
             return self.trace_dispatch
         # Don't trace this function, if it should not be traced
         if not self.trace_here(frame):
-            #print("Don't trace this:", frame.f_code.co_filename, end=" ")
-            #f = frame
-            #while f and not f is self.botframe:
-            #    print(f.f_trace is None, f.f_code.co_filename, end=" ")
-            #    f = f.f_back
-            #print()
             return
-        #print("Trace this:", frame.f_code.co_filename, frame.f_trace, end=" ")
-        #f = frame
-        #while f and not f is self.botframe:
-        #    print(f.f_trace is None, f.f_code.co_filename, end=" ")
-        #    f = f.f_back
-        #print()
         
         if self._wait_for_mainpyfile:
             self._wait_for_mainpyfile = 0

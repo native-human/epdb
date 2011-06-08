@@ -128,10 +128,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         base = super().is_skipped_module(module_name)
         if base == True:
             return True
-        #debug("not skipped", module_name)
-        # TODO: make a better check here
-        #if module_name == 'couchdb':
-        #    return True
+
         if module_name == '__main__':
             return False
         return module_name.startswith('__')
@@ -337,9 +334,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         but only if we are to stop at or just below this level."""
         exc_type, exc_value, exc_traceback = exc_info
         frame.f_locals['__exception__'] = exc_type, exc_value
-        # TODO do some alternative notification than print
-        #exc_type_name = exc_type.__name__
-        #print(exc_type_name + ':', _saferepr(exc_value), file=self.stdout)
         if exc_type == SyntaxError:
             self.dbgcom.send_synterr(exc_value[1][0], exc_value[1][1])
         self.dbgcom.send_debugmessage("interaction, because of exception: {0} {1}".format(
@@ -361,13 +355,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def user_line(self, frame):
         """This function is called when we stop or break at this line."""
-        #debug("user_line:", sys.meta_path, sys.path_hooks)
-        #debug("user_line", frame.f_code.co_filename, frame.f_lineno)
-        #self.dbgcom.send_debugmessage("userline: {} {} {} {}".format(
-        #                frame.f_code.co_filename,
-        #                frame.f_lineno,
-        #                dbg.mode,
-        #                self.running_mode))
         if frame.f_code.co_filename == "<string>":
             return
 
@@ -471,19 +458,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if not dbg.ic in nextd:
             nextd[dbg.ic] = None
 
-        # TODO clean this code up
-        if dbg.mode == 'replay':
-            pass
-        elif self.running_mode == 'continue':
-            pass
-        elif self.running_mode == 'next':
-            pass
-        elif self.running_mode == 'step':
-            pass
-        else:
+        if self.running_mode is None:
             if self._wait_for_mainpyfile:
                 return
-            #debug('Calling usercall interaction', self.running_mode, dbg.mode, self.stopafter)
             self.interaction(frame, None)
 
     def set_continue(self):
@@ -623,7 +600,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def cmd_ron(self, arg):
         """Enables reversible debugging"""
-        # TODO create or activate a new timeline
         self.ron = True
 
     def cmd_roff(self, arg):
@@ -866,15 +842,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             next_ic = dbg.current_timeline.get_next()
             next_ic[callic] = dbg.ic + 1
         except:
-            # TODO this usually happens when the program has finished
+            # this usually happens when the program has finished
             # or ron was set when there was something on the stack
             # in this case epdb simply fall back to step backwards.
 
             # In case the program ends send the information of the last line
             # executed.
-            #print("Error")
             self.dbgcom.send_lastline(self.lastline)
-            #print(self.lastline)
             pass
 
         self.nocalls -= 1
@@ -939,23 +913,11 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 return fullname
         return None
 
-    #def get_all_breaks(self):
-    #    return self.breaks
-
-    def cmd_show_break(self, arg):
-        debug("TODO")
     
     def cmd_break(self, arg, temporary = 0):
-        # break [ ([filename:]lineno | function) [, "condition"] ]
         if not arg:
             if self.breaks:  # There's at least one
-                #print("Num Type         Disp Enb   Where", file=self.stdout)
-                # TODO put some output here
-                debug("TODO output")
                 self.bpmanager.show()
-                #for bp in Breakpoint.bpbynumber:
-                #    if bp:
-                #        bp.bpprint(self.stdout)
             return
         # parse arguments; comma has lowest precedence
         # and cannot occur in filename
@@ -1130,8 +1092,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 exc_type_name = t
             else:
                 exc_type_name = t.__name__
-            # TODO: do something different than using print here
-            #print('***', exc_type_name + ':', repr(v), file=self.stdout)
+            self.dbgcom.send_debugmessage("*** {}: {}".format(exc_type_name, repr(v)))
             raise
 
     def interaction(self, frame, traceback):
