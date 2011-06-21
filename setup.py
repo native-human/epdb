@@ -1,7 +1,8 @@
-from distutils.core import setup
+#from distutils.core import setup
+from setuptools import setup
 
 setup(name='epdb',
-      version='0.1',
+      version='0.1rc1',
       description='Extended Python Debugger',
       author='Patrick Sabin',
       author_email='patricksabin@gmx.at',
