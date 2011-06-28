@@ -2,7 +2,7 @@
 from setuptools import setup
 
 setup(name='epdb',
-      version='0.1rc1',
+      version='0.2dev',
       description='Extended Python Debugger',
       author='Patrick Sabin',
       author_email='patricksabin@gmx.at',
