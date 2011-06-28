@@ -211,15 +211,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
         import builtins
-        #bltins = builtins
         imp.reload(sys.modules['random'])
         imp.reload(sys.modules['time'])
         import __main__
         __main__.__dict__.clear()
         __main__.__dict__.update({"__name__"    : "__main__",
                                   "__file__"    : filename,
-                                  "__builtins__": __builtins__,
-                                  #"__builtins__": bltins,
+                                  "__builtins__": builtins,
                                 })
 
         # When basedebugger sets tracing, a number of call and line events happens
