@@ -2,7 +2,6 @@ import sys
 import imp
 import os
 import os.path
-#import time
 
 class EpdbImportFinder:
     def __init__(self, path=None, dbgmods=[], debugger=None):
@@ -13,44 +12,33 @@ class EpdbImportFinder:
         self.dbgmods = dbgmods
 
     def find_module(self, fullname, path=None):
-        #if fullname in ['inspect', 'pkg_resources', 'mimetypes', 'textwrap']:
-        #    return None
         patchfilename = None
         
         subname = fullname.split(".")[-1]
         
         splitted_name = ["__" + e for e in fullname.split(".")]
         patchmodname = ".".join(splitted_name)
-        #print("patchmodname:", patchmodname)
         patchpath = None
         for dbgpath in self.dbgmods:
-            #print(os)
             patchpath = os.path.join(os.path.abspath(dbgpath), *splitted_name)
             if os.path.exists(patchpath):
-                #print("pkg_dir found:", patchpath)
                 break
             elif os.path.exists(patchpath+'.py'):
-                #print("patchpyfilefound", patchpath+'.py')
                 patchfilename = patchpath+'.py'
                 break
             elif os.path.exists(patchpath+".pyc"):
-                #print("TODO compiled file found", patchpath+".pyc")
                 break
             else:
                 pass
-        else:
-            #print("No patch file found")
+        else: # No patch file found"
             return # use standard import mechanism if no patch module exists
         if self.debugger:
             self.debugger.add_skip_module(fullname)
         
         if subname != fullname and self.path is None:
-            #print("subname!=fullname and path is none")
-            #print("fullname", fullname, path, self.path)
             try:
                 file, filename, stuff = imp.find_module(subname, path)
             except ImportError:
-                #print("Import Error for submodule")
                 return None
             
             return EpdbImportLoader(file, filename, stuff,
@@ -60,12 +48,9 @@ class EpdbImportFinder:
         else:
             path = [self.path]
         try:
-            #print("imp.find_module", subname, path)
             file, filename, stuff = imp.find_module(subname, path)
         except ImportError:
-            #print("Import Error")
             return None
-        #print("Return Loader")
         return EpdbImportLoader(file, filename, stuff,
                                 patchfilename=patchfilename, debugger=self.debugger)
 
@@ -78,16 +63,11 @@ class EpdbImportLoader:
         self.patchfilename = patchfilename
 
     def load_module(self, fullname):
-        #print("[Load] ", fullname, self.filename, self.stuff)
-                    
         mod = imp.load_module(fullname, self.file, self.filename, self.stuff)
         if self.file:
             self.file.close()
         mod.__loader__ = self  # for introspection
-        #print(mod.__dict__.keys())
-        #print("Loadpath: ", getattr(mod, '__path__', None), fullname)
         if self.patchfilename:
-            #print("Patch module", fullname)
             with open(self.patchfilename) as patchfile:
                 exec(patchfile.read(), mod.__dict__)
         return mod
