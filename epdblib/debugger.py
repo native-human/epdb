@@ -14,7 +14,6 @@ import epdblib.resources
 import time
 import epdblib.communication
 from epdblib.debug import debug
-#from debug import sendcmd
 import imp
 import epdblib.importer
 import epdblib.basedebugger
@@ -707,6 +706,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def cmd_step(self, arg):
         if self.is_postmortem:
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_finished()
             #debug("You are at the end of the program. You cant go forward.")
             return
         if not self.ron:
@@ -736,6 +736,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def cmd_next(self, arg):
         if self.is_postmortem:
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_finished()
             #debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
@@ -796,6 +797,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if self.is_postmortem:
             #debug("You are at the end of the program. You cant go forward.")
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
+            self.dbgcom.send_finished()
             return
         if dbg.mode == 'redo':
             #debug("Continue in redo mode")
@@ -910,7 +912,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 return fullname
         return None
 
-    
     def cmd_break(self, arg, temporary = 0):
         if not arg:
             if self.breaks:  # There's at least one
@@ -1095,7 +1096,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def interaction(self, frame, traceback):
         self.setup(frame, traceback)
         self.print_stack_entry(self.stack[self.curindex])
-        self.dbgcom.send_stopped()
+        if dbg.mode != "post_mortem":
+            self.dbgcom.send_stopped()
+        else:
+            self.dbgcom.send_finished()
         self.dbgcom.get_cmd()
         self.forget()
 

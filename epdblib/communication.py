@@ -135,7 +135,6 @@ class UdsDbgCom:
 
     def do_return(self, arg):
         "not implmented yet for epdb"
-    #do_r = do_return
 
     def do_activate_snapshot(self, arg):
         """activate a snapshot of the current timeline"""
@@ -329,6 +328,9 @@ class UdsDbgCom:
     def send_stopped(self):
         self.send("stopped#")
 
+    def send_finished(self):
+        self.send("finished#")
+
 class StdDbgCom(cmd.Cmd, ComHelp):
     def __init__(self, debugger, stdin=None, stdout=None):
         #epdblib.asyncmd.Asyncmd.__init__(self, stdin=stdin, stdout=stdout)
@@ -430,7 +432,6 @@ class StdDbgCom(cmd.Cmd, ComHelp):
 
     def do_return(self, arg):
         "not implmented yet for epdb"
-    #do_r = do_return
 
     def do_activate_snapshot(self, arg):
         """activate a snapshot of the current timeline"""
@@ -596,6 +597,9 @@ class StdDbgCom(cmd.Cmd, ComHelp):
         self.send_raw("clear breakpoint" + str(number)+ "\r\n")
 
     def send_stopped(self):
+        pass
+
+    def send_finished(self):
         pass
 
     def send_raw(self, value, *args, sep=' ', end='\n', prefix="#"):
