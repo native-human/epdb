@@ -1,6 +1,5 @@
 import socket
 import string
-import epdblib.asyncmd
 import cmd
 import io
 import sys
@@ -331,7 +330,6 @@ class UdsDbgCom:
 
 class StdDbgCom(cmd.Cmd, ComHelp):
     def __init__(self, debugger, stdin=None, stdout=None):
-        #epdblib.asyncmd.Asyncmd.__init__(self, stdin=stdin, stdout=stdout)
         cmd.Cmd.__init__(self, stdin=stdin, stdout=stdout)
         ComHelp.__init__(self, print)
         self.debugger = debugger
