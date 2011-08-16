@@ -131,9 +131,7 @@ def main():
             debug("SystemExit exception. Frame:", frame)
             epdb.interaction(frame, t)
         except epdblib.debugger.EpdbExit:
-            #debug('EpdbExit caught')
             break
-            # sys.exit(0)
         except bdb.BdbQuit:
             debug('BdbQuit caught - Shutting servers down')
             break
@@ -154,7 +152,6 @@ def main():
             #print("Running 'cont' or 'step' will restart the program")
 
             frame = sys._current_frames()[_thread.get_ident()]
-            #debug("Other exception. Frame:", frame)
             t = sys.exc_info()[2]
             epdb.interaction(frame, t)
 

@@ -298,10 +298,8 @@ class BreakpointManager:
         #from epdblib.breakpoint import Breakpoint
         bestic = -1
         for bp in self.bplist:
-            #debug("Checking Bp: ", bp)
             try:
                 for bpic in continued[bp]:
-                    #debug("Try bpic", bpic)
                     if bpic > dbg.ic:
                         break
                 else:
@@ -318,13 +316,10 @@ class BreakpointManager:
         """Looks for a preceding ic that has a breakpoint. It only looks at executed
         instruction counts. Returns 0 if nothing was found"""
         continued = dbg.current_timeline.get_continue()
-        #from epdblib.breakpoint import Breakpoint
         bestic = 0
         for bp in self.bplist:
-            #debug("Checking Bp: ", bp)
             try:
                 for bpic in reversed(continued[bp]):
-                    #debug("Try bpic")
                     if bpic < dbg.ic:
                         break
                 else:

@@ -42,7 +42,6 @@ def input(prompt=""):
     elif dbg.mode == 'normal':
         dbg.snapshottingcontrol.set_make_snapshot()
         dbg.dbgcom.send_expect_input()
-        #log.debug("expect input#")
         orig = __orig__input(prompt)
         stdout_resource_manager = dbg.current_timeline.get_manager(('__stdout__',''))
         stdout_resource_manager.update_stdout(prompt + orig + '\r\n')

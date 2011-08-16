@@ -237,8 +237,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.cleanup()
             return
         self.dbgcom.send_program_finished()
-        #debug("Program has finished")
-        #debug("Going into post-mortem interaction mode", dbg.ic)
         dbg.mode = "post_mortem"
         self.set_resources()
         self.is_postmortem = True
@@ -248,7 +246,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         #self.command_running_start_time = time.time()
         self.lastline = ''
         self.command_running_start_time = None
-        #debug('Init reversible')
         dbg.tempdir = tempfile.mkdtemp(prefix="epdb")
         os.mkdir(os.path.join(dbg.tempdir, 'stdout_resource'))
         os.mkdir(os.path.join(dbg.tempdir, 'file_resource'))
@@ -305,7 +302,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     if not res is None:
                         break
                     else:
-                        debug("Error: No key found for set_resources")
+                        self.dbgcom.send_debugmessage("Error: No key found for set_resources")
                         return
             self.dbgcom.send_debugmessage("Restoring resource {} {} {}".format(k, i, res))
             manager = dbg.current_timeline.get_manager(k)
@@ -367,23 +364,18 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             lineno = frame.f_lineno
         except:
             lineno = "err"
-        #debug("user line: ", dbg.ic, lineno)
         # TODO only make snapshots in normal mode?
 
-        #debug("Running time", self.runningtime)
         if dbg.snapshottingcontrol.get_make_snapshot():
             r = self.make_snapshot()
-            #debug('interaction snapshot made or activated', r)
             dbg.snapshottingcontrol.clear_make_snapshot()
             self.runningtime = 0
         elif self.runningtime >= 1 and dbg.mode == 'normal':
-            #debug("Make snapshot because of running time")
             r = self.make_snapshot()
             self.runningtime = 0
         
         self.lastline = "{filename}({lineno})<module>()".format(filename=frame.f_code.co_filename, lineno=frame.f_lineno)
         def setmode():
-            #debug("setmode: ", dbg.ic, dbg.current_timeline.get_max_ic())
             if dbg.mode == 'redo':
                 if dbg.ic >= dbg.current_timeline.get_max_ic():
                     dbg.mode = 'normal'
@@ -470,7 +462,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
     def cmd_snapshot(self, arg, temporary=0):
         """snapshot - makes a snapshot"""
         ic = dbg.ic
-        #debug("Ic:", ic)
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             s = self.snapshots[sid]
@@ -480,8 +471,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
         r = self.make_snapshot()
 
-        #if self.stopafter > 0:
-        #    self.stopafter -= 1
         if r == "snapshotmade":
             self.dbgcom.send_debugmessage("Made snapshot")
             self.dbgcom.send_lastline(self.lastline)
@@ -614,13 +603,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             return
 
         if dbg.ic > dbg.current_timeline.get_max_ic():
-            #debug("Set max ic: ", dbg.ic)
             dbg.current_timeline.set_max_ic(dbg.ic)
-            #debug("current maxic ", dbg.current_timeline.get_max_ic())
 
         if dbg.ic == 0:
             self.dbgcom.send_message("At the beginning of the program. Can't step back.")
-            #debug("At the beginning of the program. Can't step back")
             return
 
         s = self.findsnapshot(dbg.ic-1)
@@ -628,7 +614,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             debug("No snapshot made. Can't step back")
             return
 
-        #debug('snapshot activation', 'id:', s.id, 'steps:', steps)
         self.dbgcom.send_debugmessage("Activate ic {0}".format(dbg.ic))
         self.mp.activateic(s.id, dbg.ic - 1)
         raise EpdbExit()
@@ -670,15 +655,11 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
         if dbg.ic > dbg.current_timeline.get_max_ic():
             dbg.current_timeline.set_max_ic(dbg.ic)
-            #debug("Set max ic: ", dbg.ic)
         if dbg.ic == 0:
             self.dbgcom.send_message("At the beginning of the program. Can't step back.")
-            #debug("At the beginning of the program. Can't step back")
             return
 
         highestic = self.bpmanager.findprecedingbreakpointic()
-
-        #debug("Highest ic found: ", highestic)
 
         s = self.findsnapshot(highestic)
         if s == None:
@@ -707,24 +688,18 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if self.is_postmortem:
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
             self.dbgcom.send_finished()
-            #debug("You are at the end of the program. You cant go forward.")
             return
         if not self.ron:
             return epdblib.basedebugger.BaseDebugger.do_step(self, arg)
-        #debug("Stepping in mode: ", dbg.mode)
         if dbg.mode == 'redo':
-            #debug("Stepping in redo mode")
             s = self.findsnapshot(dbg.ic+1)
             if s == None:
-                #debug("No snapshot made. Can't step back")
                 return
             if s.ic <= dbg.ic:
-                #debug("No snapshot found to step forward to. Step forward normal way", dbg.ic, s.ic)
                 self.set_step()
                 self.running_mode = 'step'
                 return 1
             else:
-                #debug('snapshot activation', s.id, 0)
                 self.mp.activateic(s.id, dbg.ic+1)
                 raise EpdbExit()
         else:
@@ -737,7 +712,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         if self.is_postmortem:
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
             self.dbgcom.send_finished()
-            #debug("You are at the end of the program. You cant go forward.")
             return
         if dbg.mode == 'redo':
             nextd = dbg.current_timeline.get_next()
@@ -753,7 +727,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 # Use the highest available snapshot
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 if s.ic <= dbg.ic:
-                    #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                     self.set_next(self.curframe)
                     self.running_mode = 'next'
                     return 1
@@ -769,7 +742,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     pass
                 else:
                     nextic = min(nextic, bpic)
-                #debug('next inside timeline')
                 s = self.findsnapshot(nextic)
 
             #s = self.findsnapshot(dbg.ic+1)
@@ -777,13 +749,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 debug("No snapshot made. This shouldn't be")
                 return
             if s.ic <= dbg.ic:
-                #debug("No snapshot found to next forward to. Next forward normal way", dbg.ic, s.ic)
                 self.set_next(self.curframe)
-                #self.set_step()
                 self.running_mode = 'next'
                 return 1
             else:
-                #debug('snapshot activation', s.id, s.ic - nextic)
                 self.mp.activateic(s.id, nextic)
                 raise EpdbExit()
         else:
@@ -795,12 +764,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
 
     def cmd_continue(self, arg):
         if self.is_postmortem:
-            #debug("You are at the end of the program. You cant go forward.")
             self.dbgcom.send_message("You are at the end of the program. You cant go forward.")
             self.dbgcom.send_finished()
             return
         if dbg.mode == 'redo':
-            #debug("Continue in redo mode")
             bestic = self.bpmanager.findnextbreakpointic()
             if bestic == -1:
                 #debug("redo_cont: No future bp in executed instructions found")
@@ -808,14 +775,13 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                 s = self.findsnapshot(dbg.current_timeline.get_max_ic())
                 #debug("current_ic", dbg.ic, "snapshot_ic", s.ic)
                 if dbg.ic < s.ic:
-                    #debug("activate continue")
                     self.mp.activatecontinue(s.id)
                     raise EpdbExit()
                 else:
+                    # normal continue
                     pass
-                    #debug("normal continue")
             else:
-                #debug("redo_cont: Breakpoint found", bestic)
+                # redo continue
                 # find snapshot and continue
                 s = self.findsnapshot(bestic)
                 self.mp.activateic(s.id, bestic)
@@ -824,7 +790,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             self.command_running_start_time = time.time()
         self.set_continue()
         return 1
-        #return epdblib.basedebugger.BaseDebugger.do_continue(self, arg)
 
     def cmd_return(self, arg):
         debug("Return not implemented yet for epdb")
@@ -878,7 +843,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         snapshots = dbg.current_timeline.get_snapshots()
         for sid in snapshots:
             s = self.snapshots[sid]
-            #print(repr(s.id), repr(arg))
             if s.id == int(arg):
                 break
         else:
@@ -969,10 +933,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
                     # last thing to try
                     (ok, filename, ln) = self.lineinfo(arg)
                     if not ok:
-                        #debug('*** The specified object', end=' ')
-                        #print(repr(arg), end=' ', file=self.stdout)
-                        #print('is not a function', file=self.stdout)
-                        #print('or was not found along sys.path.', file=self.stdout)
                         reason = "The specified object " + repr(arg) + \
                             "is not a function or was not found along sys.path."
                         self.dbgcom.send_break_nosucess(filename, lineno, reason)
@@ -987,11 +947,9 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             # now set the break point
             err = self.set_break(filename, line, temporary, cond, funcname)
             if err:
-                #debug('***', err)
                 self.dbgcom.send_break_nosucess(filename, lineno, "Error: " + str(err))
             else:
                 bp = self.get_breaks(filename, line)[-1]
-                #debug("Breakpoint %d at %s:%d" % (bp.number, bp.file, bp.line))
                 self.dbgcom.send_break_success(bp.number, bp.file, bp.line)
 
     def checkline(self, filename, lineno):
@@ -1002,7 +960,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         """
         line = linecache.getline(filename, lineno, self.curframe.f_globals)
         if not line:
-            #print('End of file', file=self.stdout)
             return 0
         line = line.strip()
         # Don't allow setting breakpoint at a blank line
@@ -1057,7 +1014,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             if err:
                 debug('***', err)
             else:
-                #debug('Deleted breakpoint', i)
                 self.dbgcom.send_clear_success(i)
 
     def print_stack_trace(self):
@@ -1075,7 +1031,6 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
             pass
             # I think I don't need this line, not sure however
             #sendcmd(' '+self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
-        #sendcmd(self.format_stack_entry(frame_lineno, prompt_prefix), prefix='')
 
     def cmd_commands(self, arg):
         """Not supported yet"""
