@@ -8,7 +8,6 @@ import epdblib.snapshotting
 import builtins
 import _thread
 import configparser
-import epdblib.shareddict
 import tempfile
 import epdblib.resources
 import time
@@ -24,6 +23,8 @@ import operator
 from epdblib import dbg
 
 dbgpath = None
+resources = None
+resource_paths = None
 
 _repr = Repr()
 _repr.maxstring = 200
@@ -33,11 +34,15 @@ line_prefix = '\n-> '
 
 def readconfig():
     global dbgpath
+    global resources
+    global resource_paths
     sys.path = origpath
     try:
         config = configparser.ConfigParser()
         config.read(os.path.expanduser("~/.config/epdb.conf"))
-        dbgmods = config.get('Main', 'dbgmods')
+        dbgmods = list(config['PATHS'].values())
+        resources = list(config['RESOURCES'].values())
+        resource_paths = list(config['RESOURCE_PATHS'].values())
     except:
         pass
     dbgpath = dbgmods
@@ -205,7 +210,7 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         # So we clear up the __main__ and set several special variables
         # (this gets rid of pdb's globals and cleans old variables on restarts).
         #sys.path.append(dbgpath)
-        sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self, dbgmods=['./'] + self.dbgmods + [dbgpath]))
+        sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self, dbgmods=['./'] + self.dbgmods + dbgpath))
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
         import builtins
@@ -243,6 +248,10 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.interaction(self.lastframe, None)
 
     def init_reversible(self):
+        import epdblib.shareddict
+        self.resources = resources
+        self.resource_paths = resource_paths
+        epdblib.shareddict.initialize_resources(self.resources, self.resource_paths)
         #self.command_running_start_time = time.time()
         self.lastline = ''
         self.command_running_start_time = None

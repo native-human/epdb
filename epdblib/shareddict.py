@@ -118,12 +118,10 @@ class ServerTimeline:
         else:
             timelines.continue_dict[name] = ServerDict()
 
-
         if resources:
             self.resources = resources
         else:
             self.resources = ServerDict()
-        #debug("new resource set:", self.resources, type(self.resources))
         timelines.resources_dict[name] = self.resources
 
         if managers:
@@ -219,11 +217,9 @@ class ServerTimeline:
         return self.ic
 
     def get_max_ic(self):
-        #debug("Server get maxic: ", self.max_ic)
         return self.max_ic
 
     def set_max_ic(self, maxic):
-        #debug("Server set maxic: ", maxic)
         self.max_ic = maxic
 
     def get_snapshots(self):
@@ -351,9 +347,15 @@ class ProxyCreator:
         conn = connect(self.sockaddr)
         return ListProxy(objref, conn=conn)
 
+def initialize_resources(resources, resource_paths):
+    saved = sys.path[:]
+    sys.path.extend(resource_paths)
+    for r in resources:
+        __import__(r)
+    sys.path = saved
 
 def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=True):
-    #nde = ServerDict()
+
     if sockdir == None:
         socketdirectory = tempfile.mkdtemp(prefix="epdb-shareddict-")
     else:
@@ -476,7 +478,6 @@ def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=T
                                     conn.close()
                                     do_quit = True
                         except Exception as e:
-                            #debug("Remote Exception")
                             #traceback.print_exc()
                             conn.send(pickle.dumps(('EXC', e)))
                         else:
