@@ -253,7 +253,8 @@ class SnapshotConnection:
 class MainProcess:
     """This class forks the controller process. The controller process ends up
     in a loop. The other process returns with a connection to the controller"""
-    def __init__(self, proxycreator=None, tempdir=None, sockname='snapshotting.sock', startserver=True):
+    def __init__(self, proxycreator=None, tempdir=None, sockname='snapshotting.sock',
+                 startserver=True, resources=[], resource_paths=[]):
         if tempdir is None:
             dir = tempfile.mkdtemp(prefix="epdb-snap")
         else:
@@ -277,21 +278,23 @@ class MainProcess:
         
         if startserver:
             if not self.proxycreator:
-                self.start_shareddict_server()
+                self.start_shareddict_server(resources=resources, resource_paths=resource_paths)
                 self.shareddict_created = True
                 self.proxycreator = shareddict.ProxyCreator(self.dir)
             self.pid = os.fork()
             if self.pid:
+                shareddict.initialize_resources(resources, resource_paths)
                 self.server()
                 os.waitpid(self.pid,0) # wait for the child process
                 sys.exit(0)
             else:
                 self.set_up_client()
 
-    def start_shareddict_server(self):
+    def start_shareddict_server(self, resources=[], resource_paths=[]):
         #sockfile = os.path.join(SOCK_DIR, 'shareddict.sock')
         #dbg.shareddict_sock = sockfile
-        sdpid = shareddict.server(self.dir, dofork=True)
+        sdpid = shareddict.server(self.dir, dofork=True, resources=resources,
+                                  resource_paths=resource_paths)
 
     def set_up_client(self):
         from epdblib import dbg

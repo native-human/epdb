@@ -24,6 +24,11 @@ def connect(address):
     sock.connect(address)
     return Connection(sock, address=address)
 
+def initialize_resources(resources, resource_paths):
+    sys.path.extend(resource_paths)
+    for r in resources:
+        globals()[r] = __import__(r, globals(), locals(), [], 0)
+
 class Connection:
     def __init__(self, sock, address=None):
         self.sock = sock
@@ -347,14 +352,8 @@ class ProxyCreator:
         conn = connect(self.sockaddr)
         return ListProxy(objref, conn=conn)
 
-def initialize_resources(resources, resource_paths):
-    saved = sys.path[:]
-    sys.path.extend(resource_paths)
-    for r in resources:
-        __import__(r)
-    sys.path = saved
-
-def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=True):
+def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=True,
+           resources=[], resource_paths=[]):
 
     if sockdir == None:
         socketdirectory = tempfile.mkdtemp(prefix="epdb-shareddict-")
@@ -383,20 +382,17 @@ def server(sockdir=None, sockfile='shareddict.sock', dofork=False, exitatclose=T
     next_dict = {}
     continue_dict = {}
 
-    #timelines = ServerTimelines(snapshots, nde_dict, ude_dict, rnext_dict, rcontinue_dict)
     timelines = ServerTimelines(snapshots, nde_dict, ude_dict, next_dict,
                                 continue_dict, resources_dict, managers_dict
                                 )
-    #socketfile = '/tmp/shareddict'
-    #try:
-    #    os.unlink(sockfile)
-    #except OSError:
-    #    pass
+
     server = listen(sockaddr)
     if dofork:
         sdpid = os.fork() # TODO dofork returns when the server shutdowns?
         if not sdpid:
             return sdpid
+
+    initialize_resources(resources, resource_paths)
     
     do_quit = False
     connectiondict = {}
@@ -681,7 +677,8 @@ class TimelineProxy:
 
     def _remote_invoke(self, method, args, kargs):
         self.conn.send(pickle.dumps((self.objref, method, args, kargs)))
-        t,r = pickle.loads(self.conn.recv())
+        recv = self.conn.recv()
+        t,r = pickle.loads(recv)
         if t == 'RET':
             return r
         elif t == 'EXC':

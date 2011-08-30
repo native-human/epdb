@@ -8,6 +8,7 @@ import epdblib.snapshotting
 import builtins
 import _thread
 import configparser
+import epdblib.shareddict
 import tempfile
 import epdblib.resources
 import time
@@ -23,8 +24,6 @@ import operator
 from epdblib import dbg
 
 dbgpath = None
-resources = None
-resource_paths = None
 
 _repr = Repr()
 _repr.maxstring = 200
@@ -56,31 +55,6 @@ __all__ = ["run", "pm", "Epdb", "runeval", "runcall", "set_trace",
            "post_mortem"]
 
 mode = 'normal'
-
-def getmodulename(path):
-    """Get the module name, suffix, mode, and module type for a given file."""
-    filename = os.path.basename(path)
-    suffixes = [(-len(suffix), suffix, mode, mtype)
-                for suffix, mode, mtype in imp.get_suffixes()]
-    suffixes.sort() # try longest suffixes first, in case they overlap
-    for neglen, suffix, mode, mtype in suffixes:
-        if filename[neglen:] == suffix:
-            return filename[:neglen]
-            #return ModuleInfo(filename[:neglen], suffix, mode, mtype)
-
-def path_is_module(filename, module):
-    suffixes = [(-len(suffix), suffix, mode, mtype)
-                for suffix, mode, mtype in imp.get_suffixes()]
-    suffixes.sort() # try longest suffixes first, in case they overlap
-    modulepath = os.path.join(*module.split('.'))
-    sepmodulepath = os.path.join('/', modulepath)
-    initmodulepath = os.path.join(sepmodulepath, "__init__")
-    for neglen, suffix, mode, mtype in suffixes:
-        if filename == modulepath + suffix or \
-           filename.endswith(sepmodulepath + suffix) or \
-           filename.endswith(initmodulepath + suffix):
-            return True
-    return False
 
 class EpdbExit(Exception):
     """Causes a debugger to be exited for the debugged python process."""
@@ -211,6 +185,8 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         # (this gets rid of pdb's globals and cleans old variables on restarts).
         #sys.path.append(dbgpath)
         sys.meta_path.append(epdblib.importer.EpdbImportFinder(debugger=self, dbgmods=['./'] + self.dbgmods + dbgpath))
+
+        epdblib.shareddict.initialize_resources(self.resources, self.resource_paths)
         if 'builtins' in sys.modules.keys():
             del sys.modules['builtins']
         import builtins
@@ -248,17 +224,15 @@ class Epdb(epdblib.basedebugger.BaseDebugger):
         self.interaction(self.lastframe, None)
 
     def init_reversible(self):
-        import epdblib.shareddict
         self.resources = resources
         self.resource_paths = resource_paths
-        epdblib.shareddict.initialize_resources(self.resources, self.resource_paths)
         #self.command_running_start_time = time.time()
         self.lastline = ''
         self.command_running_start_time = None
         dbg.tempdir = tempfile.mkdtemp(prefix="epdb")
         os.mkdir(os.path.join(dbg.tempdir, 'stdout_resource'))
         os.mkdir(os.path.join(dbg.tempdir, 'file_resource'))
-        self.mp = epdblib.snapshotting.MainProcess(tempdir=dbg.tempdir)
+        self.mp = epdblib.snapshotting.MainProcess(tempdir=dbg.tempdir, resources=resources, resource_paths=resource_paths)
         self.proxycreator = epdblib.shareddict.ProxyCreator(dbg.tempdir)
         self.bpmanager = epdblib.breakpoint.BreakpointManager(self.proxycreator)
         self.ron = True
